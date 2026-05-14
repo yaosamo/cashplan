@@ -151,14 +151,14 @@ class BudgetStore: ObservableObject {
         boughtInCurrentMonth.reduce(0) { $0 + $1.amount }
     }
 
+    var monthName: String      { label(format: "MMMM") }
+    var monthYearLabel: String { label(format: "MMMM, yyyy") }
+
     var leftDisplay: String {
         let net = balance - monthSpent
         let formatted = formatAmount(abs(net))
         return net < 0 ? "\(formatted) OVER" : "\(formatted) LEFT"
     }
-
-    var monthName: String      { label(format: "MMMM") }
-    var monthYearLabel: String { label(format: "MMMM, yyyy") }
 
     private func label(format: String) -> String {
         let fmt = DateFormatter()

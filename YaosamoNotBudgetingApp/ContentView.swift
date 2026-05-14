@@ -132,7 +132,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
 
                     VStack(spacing: 4) {
-                        Text(store.monthYearLabel)
+                        Text("SPENT IN \(store.monthName)")
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .tracking(2)
                             .foregroundColor(.primary)
@@ -525,7 +525,7 @@ struct SettingsSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .sheet(item: $addingCategory) { cat in
             AddRecordSheet(isIncome: cat == .income)
-                .presentationDetents([.height(280)])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $editingRecord) { rec in
@@ -538,50 +538,49 @@ struct SettingsSheet: View {
     @ViewBuilder
     private func recordSection(title: String, records: [FinancialRecord], total: Double, isIncome: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .tracking(2.5)
-                    .foregroundColor(.secondary)
-                Spacer()
+            Text(title)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .tracking(2.5)
+                .foregroundColor(.secondary)
+
+            VStack(spacing: 0) {
+                ForEach(Array(records.enumerated()), id: \.element.id) { i, rec in
+                    HStack {
+                        Text(rec.name)
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(store.formatAmount(rec.amount))
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .onLongPressGesture {
+                        editingRecord = EditingRecord(record: rec, isIncome: isIncome)
+                    }
+                    Divider().padding(.leading, 16)
+                }
+
                 Button { addingCategory = isIncome ? .income : .expense } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .frame(width: 28, height: 28)
-                        .background(Color(.secondarySystemFill))
-                        .clipShape(Circle())
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(.tertiaryLabel))
+                        Text("Add record")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
             }
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(14)
 
-            if records.isEmpty {
-                Text("Nothing added yet")
-                    .font(.system(size: 15))
-                    .foregroundColor(Color(.tertiaryLabel))
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(records.enumerated()), id: \.element.id) { i, rec in
-                        HStack {
-                            Text(rec.name)
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Text(store.formatAmount(rec.amount))
-                                .font(.system(size: 16))
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                        .onLongPressGesture {
-                            editingRecord = EditingRecord(record: rec, isIncome: isIncome)
-                        }
-                        if i < records.count - 1 { Divider().padding(.leading, 16) }
-                    }
-                }
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(14)
-
+            if !records.isEmpty {
                 HStack {
                     Text("Total")
                         .font(.system(size: 13))
@@ -604,56 +603,113 @@ struct AddRecordSheet: View {
     @Environment(\.dismiss) private var dismiss
     let isIncome: Bool
     @State private var name = ""
-    @State private var amountText = ""
-    @FocusState private var focused: Bool
+    @State private var input = ""
+    @FocusState private var nameFocused: Bool
 
-    var canSave: Bool { !name.isEmpty && Double(amountText) != nil }
+    var canSave: Bool { !name.isEmpty && !(input.isEmpty || input == "0.") }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 0) {
             SheetHeader(title: isIncome ? "Add Income" : "Add Expense") { dismiss() }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
 
-            VStack(spacing: 10) {
-                TextField(isIncome ? "Source (e.g. Salary)" : "Name (e.g. Rent)", text: $name)
-                    .padding(14)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
-                    .textFieldStyle(.plain)
-                    .focused($focused)
-
-                HStack {
-                    Text(store.currencySymbol).foregroundColor(.secondary).padding(.leading, 14)
-                    TextField("Amount", text: $amountText)
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(.plain)
-                        .padding(.vertical, 14)
-                        .padding(.trailing, 14)
-                }
+            TextField(isIncome ? "Source (e.g. Salary)" : "Name (e.g. Rent)", text: $name)
+                .padding(14)
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(12)
+                .textFieldStyle(.plain)
+                .focused($nameFocused)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+            Spacer()
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(store.currencySymbol)
+                    .font(.system(size: 36, weight: .light, design: .rounded))
+                    .foregroundColor(.secondary)
+                Text(input.isEmpty ? "0" : input)
+                    .font(.system(size: 72, weight: .medium, design: .rounded))
+                    .foregroundColor(.primary)
+                    .minimumScaleFactor(0.3)
+                    .lineLimit(1)
             }
+            .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .onTapGesture { nameFocused = false }
+
+            Spacer()
+
+            VStack(spacing: 10) {
+                ForEach([[1,2,3],[4,5,6],[7,8,9]], id: \.self) { row in
+                    HStack(spacing: 10) {
+                        ForEach(row, id: \.self) { n in
+                            numKey("\(n)") { tap("\(n)") }
+                        }
+                    }
+                }
+                HStack(spacing: 10) {
+                    numKey(".") { tapDot() }
+                    numKey("0") { tap("0") }
+                    numKey("⌫") { tapBack() }
+                }
+            }
+            .padding(.horizontal, 16)
 
             Button {
-                if let amount = Double(amountText), !name.isEmpty {
+                if let amount = Double(input), !name.isEmpty {
                     if isIncome { store.addIncome(name: name, amount: amount) }
                     else        { store.addExpense(name: name, amount: amount) }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     dismiss()
                 }
             } label: {
                 Text("Add")
-                    .font(.headline)
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(canSave ? Color(.systemBackground) : .secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(16)
+                    .padding(.vertical, 16)
                     .background(canSave ? Color(.label) : Color(.tertiarySystemFill))
                     .cornerRadius(14)
                     .animation(.easeInOut(duration: 0.15), value: canSave)
             }
             .disabled(!canSave)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 36)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onAppear { focused = true }
+    }
+
+    func tap(_ d: String) {
+        nameFocused = false
+        guard input.count < 10 else { return }
+        if d == "0" && input.isEmpty { return }
+        input += d
+    }
+
+    func tapDot() {
+        nameFocused = false
+        guard !input.contains(".") else { return }
+        input += input.isEmpty ? "0." : "."
+    }
+
+    func tapBack() {
+        guard !input.isEmpty else { return }
+        input.removeLast()
+    }
+
+    @ViewBuilder
+    func numKey(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: label == "⌫" ? 20 : 26, weight: .regular))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+        }
     }
 }
 
