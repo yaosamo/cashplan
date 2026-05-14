@@ -28,26 +28,35 @@ struct SettingsSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
 
-            List {
-                recordSection(title: "INCOME",   records: store.incomeRecords,  total: store.totalIncome,   isIncome: true)
-                recordSection(title: "EXPENSES", records: store.expenseRecords, total: store.totalExpenses, isIncome: false)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    recordSection(title: "INCOME",   records: store.incomeRecords,  total: store.totalIncome,   isIncome: true)
+                    recordSection(title: "EXPENSES", records: store.expenseRecords, total: store.totalExpenses, isIncome: false)
 
-                Section {
-                    Button { showCurrencyPicker = true } label: {
-                        HStack {
-                            Text("Currency")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Text("\(store.currencySymbol) \(store.currencyCode)")
-                                .foregroundColor(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(.tertiaryLabel))
+                    VStack(spacing: 0) {
+                        Button { showCurrencyPicker = true } label: {
+                            HStack {
+                                Text("Currency")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("\(store.currencySymbol) \(store.currencyCode)")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(.tertiaryLabel))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                         }
                     }
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(14)
                 }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
             }
-            .listStyle(.insetGrouped)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .sheet(isPresented: $showCurrencyPicker) {
@@ -69,28 +78,60 @@ struct SettingsSheet: View {
 
     @ViewBuilder
     private func recordSection(title: String, records: [FinancialRecord], total: Double, isIncome: Bool) -> some View {
-        Section {
-            ForEach(records) { rec in
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .tracking(2.5)
+                .foregroundColor(.secondary)
+
+            VStack(spacing: 0) {
+                ForEach(Array(records.enumerated()), id: \.element.id) { _, rec in
+                    HStack {
+                        Text(rec.name)
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(store.formatAmount(rec.amount))
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .onLongPressGesture {
+                        editingRecord = EditingRecord(record: rec, isIncome: isIncome)
+                    }
+                    Divider().padding(.leading, 16)
+                }
+
+                Button { addingCategory = isIncome ? .income : .expense } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(.tertiaryLabel))
+                        Text("Add record")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+            }
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(14)
+
+            if !records.isEmpty {
                 HStack {
-                    Text(rec.name)
+                    Text("Total")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
                     Spacer()
-                    Text(store.formatAmount(rec.amount))
+                    Text(store.formatAmount(total))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
                 }
-                .contentShape(Rectangle())
-                .onLongPressGesture {
-                    editingRecord = EditingRecord(record: rec, isIncome: isIncome)
-                }
-            }
-            Button { addingCategory = isIncome ? .income : .expense } label: {
-                Label("Add record", systemImage: "plus")
-                    .foregroundColor(.secondary)
-            }
-        } header: {
-            Text(title)
-        } footer: {
-            if !records.isEmpty {
-                Text("Total \(store.formatAmount(total))")
+                .padding(.horizontal, 4)
             }
         }
     }
