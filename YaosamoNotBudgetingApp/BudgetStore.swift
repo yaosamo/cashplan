@@ -21,6 +21,7 @@ struct Currency: Identifiable {
     let code: String
     let symbol: String
     let name: String
+    let flag: String
     var id: String { code }
 }
 
@@ -38,16 +39,16 @@ class BudgetStore: ObservableObject {
     // MARK: - Currency
 
     static let supported: [Currency] = [
-        Currency(code: "USD", symbol: "$",   name: "US Dollar"),
-        Currency(code: "EUR", symbol: "€",   name: "Euro"),
-        Currency(code: "GBP", symbol: "£",   name: "British Pound"),
-        Currency(code: "JPY", symbol: "¥",   name: "Japanese Yen"),
-        Currency(code: "CNY", symbol: "¥",   name: "Chinese Yuan"),
-        Currency(code: "CAD", symbol: "$",   name: "Canadian Dollar"),
-        Currency(code: "AUD", symbol: "A$",  name: "Australian Dollar"),
-        Currency(code: "CHF", symbol: "Fr",  name: "Swiss Franc"),
-        Currency(code: "INR", symbol: "₹",   name: "Indian Rupee"),
-        Currency(code: "BRL", symbol: "R$",  name: "Brazilian Real"),
+        Currency(code: "USD", symbol: "$",   name: "US Dollar",         flag: "🇺🇸"),
+        Currency(code: "EUR", symbol: "€",   name: "Euro",              flag: "🇪🇺"),
+        Currency(code: "GBP", symbol: "£",   name: "British Pound",     flag: "🇬🇧"),
+        Currency(code: "JPY", symbol: "¥",   name: "Japanese Yen",      flag: "🇯🇵"),
+        Currency(code: "CNY", symbol: "¥",   name: "Chinese Yuan",      flag: "🇨🇳"),
+        Currency(code: "CAD", symbol: "$",   name: "Canadian Dollar",   flag: "🇨🇦"),
+        Currency(code: "AUD", symbol: "A$",  name: "Australian Dollar", flag: "🇦🇺"),
+        Currency(code: "CHF", symbol: "Fr",  name: "Swiss Franc",       flag: "🇨🇭"),
+        Currency(code: "INR", symbol: "₹",   name: "Indian Rupee",      flag: "🇮🇳"),
+        Currency(code: "BRL", symbol: "R$",  name: "Brazilian Real",    flag: "🇧🇷"),
     ]
 
     private static func defaultCurrency() -> String {

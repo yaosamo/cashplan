@@ -28,67 +28,33 @@ struct SettingsSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    recordSection(title: "INCOME",   records: store.incomeRecords,  total: store.totalIncome,   isIncome: true)
-                    recordSection(title: "EXPENSES", records: store.expenseRecords, total: store.totalExpenses, isIncome: false)
+            List {
+                recordSection(title: "INCOME",   records: store.incomeRecords,  total: store.totalIncome,   isIncome: true)
+                recordSection(title: "EXPENSES", records: store.expenseRecords, total: store.totalExpenses, isIncome: false)
 
-                    VStack(spacing: 0) {
-                        Button {
-                            withAnimation(.spring(response: 0.3)) { showCurrencyPicker.toggle() }
-                        } label: {
-                            HStack {
-                                Text("Currency")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                Text(store.currencySymbol)
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.secondary)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(.tertiaryLabel))
-                                    .rotationEffect(.degrees(showCurrencyPicker ? 90 : 0))
-                                    .animation(.spring(response: 0.3), value: showCurrencyPicker)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                        }
-                        if showCurrencyPicker {
-                            Divider().padding(.leading, 16)
-                            VStack(spacing: 0) {
-                                ForEach(Array(BudgetStore.supported.enumerated()), id: \.element.id) { i, c in
-                                    Button { store.currencyCode = c.code } label: {
-                                        HStack {
-                                            Text(c.name)
-                                                .font(.system(size: 16))
-                                                .foregroundColor(.primary)
-                                            Spacer()
-                                            if store.currencyCode == c.code {
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 13, weight: .semibold))
-                                                    .foregroundColor(.primary)
-                                            }
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 12)
-                                    }
-                                    if i < BudgetStore.supported.count - 1 {
-                                        Divider().padding(.leading, 16)
-                                    }
-                                }
-                            }
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                Section {
+                    Button { showCurrencyPicker = true } label: {
+                        HStack {
+                            Text("Currency")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text("\(store.currencySymbol) \(store.currencyCode)")
+                                .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(.tertiaryLabel))
                         }
                     }
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(14)
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
             }
+            .listStyle(.insetGrouped)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .sheet(isPresented: $showCurrencyPicker) {
+            CurrencyPickerSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(item: $addingCategory) { cat in
             AddRecordSheet(isIncome: cat == .income)
                 .presentationDetents([.large])
@@ -103,61 +69,75 @@ struct SettingsSheet: View {
 
     @ViewBuilder
     private func recordSection(title: String, records: [FinancialRecord], total: Double, isIncome: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .tracking(2.5)
-                .foregroundColor(.secondary)
-
-            VStack(spacing: 0) {
-                ForEach(Array(records.enumerated()), id: \.element.id) { _, rec in
-                    HStack {
-                        Text(rec.name)
-                            .font(.system(size: 16))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text(store.formatAmount(rec.amount))
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                    .onLongPressGesture {
-                        editingRecord = EditingRecord(record: rec, isIncome: isIncome)
-                    }
-                    Divider().padding(.leading, 16)
-                }
-
-                Button { addingCategory = isIncome ? .income : .expense } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(Color(.tertiaryLabel))
-                        Text("Add record")
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-            }
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(14)
-
-            if !records.isEmpty {
+        Section {
+            ForEach(records) { rec in
                 HStack {
-                    Text("Total")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                    Text(rec.name)
                     Spacer()
-                    Text(store.formatAmount(total))
-                        .font(.system(size: 13, weight: .medium))
+                    Text(store.formatAmount(rec.amount))
                         .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 4)
+                .contentShape(Rectangle())
+                .onLongPressGesture {
+                    editingRecord = EditingRecord(record: rec, isIncome: isIncome)
+                }
             }
+            Button { addingCategory = isIncome ? .income : .expense } label: {
+                Label("Add record", systemImage: "plus")
+                    .foregroundColor(.secondary)
+            }
+        } header: {
+            Text(title)
+        } footer: {
+            if !records.isEmpty {
+                Text("Total \(store.formatAmount(total))")
+            }
+        }
+    }
+}
+
+// MARK: - Currency Picker Sheet
+
+struct CurrencyPickerSheet: View {
+    @EnvironmentObject var store: BudgetStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetHeader(title: "Currency") { dismiss() }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
+            List(BudgetStore.supported) { currency in
+                Button {
+                    store.currencyCode = currency.code
+                    dismiss()
+                } label: {
+                    HStack(spacing: 14) {
+                        Text(currency.flag)
+                            .font(.system(size: 28))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(currency.name)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            Text("\(currency.code) · \(currency.symbol)")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        if store.currencyCode == currency.code {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .listStyle(.insetGrouped)
         }
     }
 }
