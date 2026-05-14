@@ -59,14 +59,18 @@ class BudgetStore: ObservableObject {
         BudgetStore.supported.first(where: { $0.code == currencyCode })?.symbol ?? currencyCode
     }
 
-    func formatAmount(_ amount: Double) -> String {
+    private let formatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.currencyCode = currencyCode
-        f.currencySymbol = currencySymbol
         f.maximumFractionDigits = 0
         f.minimumFractionDigits = 0
-        return f.string(from: NSNumber(value: amount)) ?? "\(currencySymbol)\(Int(amount))"
+        return f
+    }()
+
+    func formatAmount(_ amount: Double) -> String {
+        formatter.currencyCode   = currencyCode
+        formatter.currencySymbol = currencySymbol
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(currencySymbol)\(Int(amount))"
     }
 
     // MARK: - Computed balance
@@ -151,8 +155,7 @@ class BudgetStore: ObservableObject {
         boughtInCurrentMonth.reduce(0) { $0 + $1.amount }
     }
 
-    var monthName: String      { label(format: "MMMM") }
-    var monthYearLabel: String { label(format: "MMMM, yyyy") }
+    var monthName: String { label(format: "MMMM") }
 
     var leftDisplay: String {
         let net = balance - monthSpent
@@ -196,10 +199,12 @@ class BudgetStore: ObservableObject {
     }
 
     func addItem(name: String, amount: Double) {
+        guard amount > 0, amount.isFinite else { return }
         items.append(PurchaseItem(name: name, amount: amount))
     }
 
     func updateItem(id: UUID, name: String, amount: Double) {
+        guard amount > 0, amount.isFinite else { return }
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         items[i].name   = name
         items[i].amount = amount
@@ -212,14 +217,17 @@ class BudgetStore: ObservableObject {
     // MARK: - Financial record mutations
 
     func addIncome(name: String, amount: Double) {
+        guard amount > 0, amount.isFinite else { return }
         incomeRecords.append(FinancialRecord(name: name, amount: amount))
     }
 
     func addExpense(name: String, amount: Double) {
+        guard amount > 0, amount.isFinite else { return }
         expenseRecords.append(FinancialRecord(name: name, amount: amount))
     }
 
     func updateRecord(id: UUID, isIncome: Bool, name: String, amount: Double) {
+        guard amount > 0, amount.isFinite else { return }
         if isIncome {
             guard let i = incomeRecords.firstIndex(where: { $0.id == id }) else { return }
             incomeRecords[i].name = name; incomeRecords[i].amount = amount
