@@ -30,6 +30,18 @@ struct SettingsSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    VStack(spacing: 4) {
+                        Text(store.formatAmount(store.balance))
+                            .font(.system(size: 48, weight: .medium, design: .rounded))
+                            .foregroundColor(.primary)
+                        Text("BALANCE")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .tracking(2.5)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+
                     recordSection(title: "INCOME",   records: store.incomeRecords,  total: store.totalIncome,   isIncome: true)
                     recordSection(title: "EXPENSES", records: store.expenseRecords, total: store.totalExpenses, isIncome: false)
 
@@ -98,7 +110,7 @@ struct SettingsSheet: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
-                    .onLongPressGesture {
+                    .onTapGesture {
                         editingRecord = EditingRecord(record: rec, isIncome: isIncome)
                     }
                     Divider().padding(.leading, 16)
