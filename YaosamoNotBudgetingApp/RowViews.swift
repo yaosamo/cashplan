@@ -24,7 +24,14 @@ struct BoughtRowView: View {
                     .symbolEffect(.bounce, value: bounce)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(.system(size: 17)).foregroundColor(.primary)
+                HStack(spacing: 5) {
+                    Text(item.name).font(.system(size: 17)).foregroundColor(.primary)
+                    if item.link != nil {
+                        Image(systemName: "link")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                }
                 if let date = item.boughtDate {
                     Text(date, format: .dateTime.month(.abbreviated).day())
                         .font(.system(size: 12))
@@ -59,7 +66,14 @@ struct PlannedRowView: View {
                     .foregroundColor(Color(.tertiaryLabel))
                     .symbolEffect(.bounce, value: bounce)
             }
-            Text(item.name).font(.system(size: 17)).foregroundColor(.primary)
+            HStack(spacing: 5) {
+                Text(item.name).font(.system(size: 17)).foregroundColor(.primary)
+                if item.link != nil {
+                    Image(systemName: "link")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(.tertiaryLabel))
+                }
+            }
             Spacer()
             Text(store.formatAmount(item.amount)).font(.system(size: 17)).foregroundColor(.primary)
         }
