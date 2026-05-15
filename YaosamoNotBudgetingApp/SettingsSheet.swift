@@ -341,7 +341,7 @@ struct EditRecordSheet: View {
         }
         .sheet(isPresented: $showAmountSheet) {
             AmountEntrySheet(input: $input)
-                .presentationDetents([.large])
+                .presentationDetents([.fraction(0.58)])
                 .presentationDragIndicator(.visible)
         }
     }

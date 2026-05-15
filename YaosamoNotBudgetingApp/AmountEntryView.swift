@@ -89,7 +89,7 @@ struct NumpadView: View {
             Text(label)
                 .font(.system(size: label == "⌫" ? 20 : 26, weight: .regular))
                 .foregroundColor(.primary)
-                .frame(maxWidth: .infinity).frame(height: 56)
+                .frame(maxWidth: .infinity).frame(height: 48)
                 .background(Color(.secondarySystemBackground)).cornerRadius(12)
         }
     }
@@ -105,9 +105,8 @@ struct AmountEntrySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             SheetHeader(title: "Amount", onClose: { dismiss() }, onConfirm: { dismiss() })
-            Spacer()
             AmountDisplayText(input: input, currencySymbol: store.currencySymbol)
-            Spacer()
+                .frame(maxHeight: .infinity)
             NumpadView(input: $input).padding(.horizontal, 16)
             Spacer().frame(height: 36)
         }
