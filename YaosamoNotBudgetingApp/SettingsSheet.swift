@@ -250,6 +250,7 @@ struct EditRecordSheet: View {
     let isIncome: Bool
     @State private var input: String
     @State private var name: String
+    @State private var showAmountSheet = false
     @FocusState private var nameFocused: Bool
 
     init(record: FinancialRecord? = nil, isIncome: Bool) {
@@ -279,24 +280,35 @@ struct EditRecordSheet: View {
 
             Spacer()
 
-            AmountDisplayText(input: input, currencySymbol: store.currencySymbol)
+            TextField("–", text: $name)
+                .font(.system(size: 48, weight: .medium, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundColor(.primary)
+                .minimumScaleFactor(0.35)
+                .lineLimit(1)
+                .padding(.horizontal, 32)
+                .focused($nameFocused)
+                .submitLabel(.done)
+                .onAppear { nameFocused = true }
 
             Spacer()
 
-            HStack {
-                Text("Name")
-                    .font(.system(size: 16))
-                    .foregroundColor(.secondary)
-                Spacer()
-                TextField("–", text: $name)
-                    .font(.system(size: 16))
-                    .multilineTextAlignment(.trailing)
-                    .focused($nameFocused)
-                    .foregroundColor(.primary)
-                    .submitLabel(.done)
+            Button { showAmountSheet = true } label: {
+                HStack {
+                    Text("Amount")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(input.isEmpty ? "–" : "\(store.currencySymbol)\(numpadDisplay(input))")
+                        .font(.system(size: 16))
+                        .foregroundColor(input.isEmpty ? Color(.tertiaryLabel) : .primary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(.tertiaryLabel))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
             .background(Color(.secondarySystemBackground))
             .cornerRadius(14)
             .padding(.horizontal, 16)
@@ -304,31 +316,33 @@ struct EditRecordSheet: View {
             Spacer().frame(height: 16)
 
             Button {
-                guard let amount = Double(input), amount > 0, amount.isFinite, !name.isEmpty else { return }
-                if isAdding {
-                    if isIncome { store.addIncome(name: name, amount: amount) }
-                    else        { store.addExpense(name: name, amount: amount) }
-                } else if let record {
-                    store.updateRecord(id: record.id, isIncome: isIncome, name: name, amount: amount)
+                if canSave, let amount = Double(input) {
+                    if isAdding {
+                        if isIncome { store.addIncome(name: name, amount: amount) }
+                        else        { store.addExpense(name: name, amount: amount) }
+                    } else if let record {
+                        store.updateRecord(id: record.id, isIncome: isIncome, name: name, amount: amount)
+                    }
+                    dismiss()
+                } else {
+                    showAmountSheet = true
                 }
-                dismiss()
             } label: {
-                Text(isAdding ? "Add" : "Save")
+                Text(canSave ? (isAdding ? "Add" : "Save") : "Next")
                     .font(.headline)
-                    .foregroundColor(canSave ? Color(.systemBackground) : .secondary)
+                    .foregroundColor(Color(.systemBackground))
                     .frame(maxWidth: .infinity).padding(16)
-                    .background(canSave ? Color(.label) : Color(.tertiarySystemFill))
+                    .background(Color(.label))
                     .cornerRadius(14)
                     .animation(.easeInOut(duration: 0.15), value: canSave)
             }
-            .disabled(!canSave)
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
-
-            if !nameFocused {
-                NumpadView(input: $input).padding(.horizontal, 16)
-                Spacer().frame(height: 36)
-            }
+        }
+        .sheet(isPresented: $showAmountSheet) {
+            AmountEntrySheet(input: $input)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 }

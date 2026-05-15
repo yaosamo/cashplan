@@ -4,6 +4,7 @@ struct SheetHeader: View {
     let title: String
     let onClose: () -> Void
     var onDelete: (() -> Void)? = nil
+    var onConfirm: (() -> Void)? = nil
     var showBack: Bool = false
     @State private var showDeleteConfirm = false
 
@@ -21,7 +22,15 @@ struct SheetHeader: View {
                         .liquidGlass()
                 }
                 Spacer()
-                if onDelete != nil {
+                if let onConfirm {
+                    Button(action: onConfirm) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .frame(width: 42, height: 36)
+                            .liquidGlass()
+                    }
+                } else if onDelete != nil {
                     Button { showDeleteConfirm = true } label: {
                         Image(systemName: "trash")
                             .font(.system(size: 14, weight: .semibold))

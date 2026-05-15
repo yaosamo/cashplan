@@ -9,12 +9,15 @@ struct EditItemSheet: View {
     let item: PurchaseItem?
     @State private var input: String
     @State private var name: String
+    @State private var showAmountSheet = false
+    @State private var link: String
     @FocusState private var nameFocused: Bool
 
     init(item: PurchaseItem? = nil) {
         self.item = item
         _input = State(initialValue: item.map { MoneyInput.editableString($0.amount) } ?? "")
         _name  = State(initialValue: item?.name ?? "")
+        _link  = State(initialValue: item?.link ?? "")
     }
 
     private var isAdding: Bool { item == nil }
@@ -37,21 +40,60 @@ struct EditItemSheet: View {
 
             Spacer()
 
-            AmountDisplayText(input: input, currencySymbol: store.currencySymbol)
+            TextField("Purchase", text: $name)
+                .font(.system(size: 48, weight: .medium, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundColor(.primary)
+                .minimumScaleFactor(0.35)
+                .lineLimit(1)
+                .padding(.horizontal, 32)
+                .focused($nameFocused)
+                .submitLabel(.done)
+                .onAppear { nameFocused = true }
 
             Spacer()
 
+            Button { showAmountSheet = true } label: {
+                HStack {
+                    Text("Amount")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(input.isEmpty ? "–" : "\(store.currencySymbol)\(numpadDisplay(input))")
+                        .font(.system(size: 16))
+                        .foregroundColor(input.isEmpty ? Color(.tertiaryLabel) : .primary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(.tertiaryLabel))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(14)
+            .padding(.horizontal, 16)
+
             HStack {
-                Text("Name")
+                Text("Link")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
                 Spacer()
-                TextField("–", text: $name)
-                    .font(.system(size: 16))
-                    .multilineTextAlignment(.trailing)
-                    .focused($nameFocused)
-                    .foregroundColor(.primary)
-                    .submitLabel(.done)
+                if link.isEmpty {
+                    Button("Paste") { link = UIPasteboard.general.string ?? "" }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                } else {
+                    TextField("https://", text: $link)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.trailing)
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                    Button { link = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -62,30 +104,32 @@ struct EditItemSheet: View {
             Spacer().frame(height: 16)
 
             Button {
-                guard let amount = Double(input), amount > 0, amount.isFinite, !name.isEmpty else { return }
-                if isAdding {
-                    store.addItem(name: name, amount: amount)
-                } else if let item {
-                    store.updateItem(id: item.id, name: name, amount: amount)
+                if canSave, let amount = Double(input) {
+                    if isAdding {
+                        store.addItem(name: name, amount: amount, link: link)
+                    } else if let item {
+                        store.updateItem(id: item.id, name: name, amount: amount, link: link)
+                    }
+                    dismiss()
+                } else {
+                    showAmountSheet = true
                 }
-                dismiss()
             } label: {
-                Text(isAdding ? "Add" : "Save")
+                Text(canSave ? (isAdding ? "Add" : "Save") : "Next")
                     .font(.headline)
-                    .foregroundColor(canSave ? Color(.systemBackground) : .secondary)
+                    .foregroundColor(Color(.systemBackground))
                     .frame(maxWidth: .infinity).padding(16)
-                    .background(canSave ? Color(.label) : Color(.tertiarySystemFill))
+                    .background(Color(.label))
                     .cornerRadius(14)
                     .animation(.easeInOut(duration: 0.15), value: canSave)
             }
-            .disabled(!canSave)
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
-
-            if !nameFocused {
-                NumpadView(input: $input).padding(.horizontal, 16)
-                Spacer().frame(height: 36)
-            }
+        }
+        .sheet(isPresented: $showAmountSheet) {
+            AmountEntrySheet(input: $input)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 }

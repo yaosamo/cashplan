@@ -94,3 +94,22 @@ struct NumpadView: View {
         }
     }
 }
+
+// MARK: - Amount Entry Sheet
+
+struct AmountEntrySheet: View {
+    @EnvironmentObject var store: BudgetStore
+    @Environment(\.dismiss) private var dismiss
+    @Binding var input: String
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetHeader(title: "Amount", onClose: { dismiss() }, onConfirm: { dismiss() })
+            Spacer()
+            AmountDisplayText(input: input, currencySymbol: store.currencySymbol)
+            Spacer()
+            NumpadView(input: $input).padding(.horizontal, 16)
+            Spacer().frame(height: 36)
+        }
+    }
+}

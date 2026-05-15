@@ -9,6 +9,7 @@ struct PurchaseItem: Identifiable, Codable {
     var boughtMonth: Int? = nil
     var boughtYear: Int? = nil
     var boughtDate: Date? = nil
+    var link: String? = nil
 }
 
 struct FinancialRecord: Identifiable, Codable {
@@ -261,16 +262,19 @@ class BudgetStore: ObservableObject {
         items[i].boughtDate  = nil
     }
 
-    func addItem(name: String, amount: Double) {
+    func addItem(name: String, amount: Double, link: String = "") {
         guard amount > 0, amount.isFinite else { return }
-        items.append(PurchaseItem(name: name, amount: amount))
+        var item = PurchaseItem(name: name, amount: amount)
+        item.link = link.isEmpty ? nil : link
+        items.append(item)
     }
 
-    func updateItem(id: UUID, name: String, amount: Double) {
+    func updateItem(id: UUID, name: String, amount: Double, link: String = "") {
         guard amount > 0, amount.isFinite else { return }
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         items[i].name   = name
         items[i].amount = amount
+        items[i].link   = link.isEmpty ? nil : link
     }
 
     func removeItem(id: UUID) {
