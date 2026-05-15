@@ -17,6 +17,17 @@ struct FinancialRecord: Identifiable, Codable {
     var amount: Double
 }
 
+struct MonthlySpend: Identifiable {
+    let month: Int
+    let year: Int
+    let amount: Double
+    var id: String { "\(year)-\(String(format: "%02d", month))" }
+    var date: Date {
+        var c = DateComponents(); c.month = month; c.year = year; c.day = 1
+        return Calendar.current.date(from: c) ?? Date()
+    }
+}
+
 struct Currency: Identifiable {
     let code: String
     let symbol: String
@@ -175,7 +186,26 @@ class BudgetStore: ObservableObject {
         boughtInCurrentMonth.reduce(0) { $0 + $1.amount }
     }
 
+    var monthlySpendHistory: [MonthlySpend] {
+        Dictionary(
+            grouping: items.filter { $0.isBought && $0.boughtMonth != nil && $0.boughtYear != nil },
+            by: { "\($0.boughtYear!)-\(String(format: "%02d", $0.boughtMonth!))" }
+        )
+        .map { _, group in
+            MonthlySpend(month: group[0].boughtMonth!, year: group[0].boughtYear!,
+                         amount: group.reduce(0) { $0 + $1.amount })
+        }
+        .sorted { $0.year != $1.year ? $0.year < $1.year : $0.month < $1.month }
+    }
+
     var monthName: String { label(format: "MMMM") }
+
+    var daysInCurrentMonth: Int {
+        var dc = DateComponents(); dc.month = currentMonth; dc.year = currentYear
+        guard let anchor = Calendar.current.date(from: dc),
+              let range  = Calendar.current.range(of: .day, in: .month, for: anchor) else { return 31 }
+        return range.count
+    }
 
     var monthProgress: Double {
         let cal = Calendar.current
@@ -185,10 +215,7 @@ class BudgetStore: ObservableObject {
         let thisYear  = comps.year  ?? currentYear
         if currentYear < thisYear  || (currentYear == thisYear && currentMonth < thisMonth) { return 1.0 }
         if currentYear > thisYear  || (currentYear == thisYear && currentMonth > thisMonth) { return 0.0 }
-        var dc = DateComponents(); dc.month = currentMonth; dc.year = currentYear
-        guard let anchor = cal.date(from: dc),
-              let range  = cal.range(of: .day, in: .month, for: anchor) else { return 0 }
-        return Double(cal.component(.day, from: now)) / Double(range.count)
+        return Double(cal.component(.day, from: now)) / Double(daysInCurrentMonth)
     }
 
     var isOver: Bool { balance - monthSpent < 0 }

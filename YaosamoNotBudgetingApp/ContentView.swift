@@ -6,12 +6,14 @@ struct ContentView: View {
     @StateObject private var motion = MotionManager()
 
     @State private var showSettings    = false
+    @State private var showAnalytics   = false
     @State private var showAddPurchase = false
     @State private var editingItem: PurchaseItem? = nil
     @State private var headerOffset: CGFloat = 0
     @State private var headerScale: CGFloat  = 1.0
     @State private var headerOpacity: Double = 1.0
     @State private var leftShake: CGFloat = 0
+    @State private var squaresVisible: Bool = false
 #if DEBUG
     @State private var showTweak    = false
     @State private var showTweakBtn = false
@@ -80,28 +82,30 @@ struct ContentView: View {
 
                         // Month progress
                         VStack(spacing: 8) {
-                            GeometryReader { geo in
-                                let count  = 31
-                                let gap: CGFloat = 3
-                                let blockW = (geo.size.width - gap * CGFloat(count - 1)) / CGFloat(count)
-                                HStack(spacing: gap) {
-                                    ForEach(0..<count, id: \.self) { i in
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(Double(i) / Double(count) < store.monthProgress
-                                                  ? Color.primary
-                                                  : Color.primary.opacity(0.12))
-                                            .frame(width: blockW, height: 8)
-                                    }
+                            HStack(spacing: 2) {
+                                ForEach(0..<store.daysInCurrentMonth, id: \.self) { i in
+                                    Rectangle()
+                                        .fill(Double(i) / Double(store.daysInCurrentMonth) < store.monthProgress
+                                              ? Color.primary
+                                              : Color.primary.opacity(0.12))
+                                        .frame(width: 8, height: 8)
+                                        .scaleEffect(squaresVisible ? 1 : 0.01, anchor: .bottom)
+                                        .opacity(squaresVisible ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.32, dampingFraction: 0.52)
+                                            .delay(Double(i) * 0.022),
+                                            value: squaresVisible
+                                        )
                                 }
                             }
-                            .frame(height: 8)
+                            .onAppear { squaresVisible = true }
 
                             Text("MONTH PROGRESS \(Int(store.monthProgress * 100))%")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .tracking(2)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.primary)
                         }
-                        .padding(.top, 28)
+                        .padding(.top, 44)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 96)
@@ -216,6 +220,11 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
         }
+        .sheet(isPresented: $showAnalytics) {
+            AnalyticsSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showAddPurchase) {
             EditItemSheet()
                 .presentationDetents([.large])
@@ -236,8 +245,13 @@ struct ContentView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 40, coordinateSpace: .global)
                 .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    if value.translation.width < 0 { goNext() } else { goPrev() }
+                    let h = value.translation.height
+                    let w = value.translation.width
+                    if abs(h) > abs(w) {
+                        if h > 60 && value.startLocation.y < 220 { showAnalytics = true }
+                    } else {
+                        if w < 0 { goNext() } else { goPrev() }
+                    }
                 }
         )
         .onAppear { motion.start() }
@@ -286,6 +300,7 @@ struct ContentView: View {
     func goNext() { animateHeader(forward: true)  { store.nextMonth() } }
     func goPrev() { animateHeader(forward: false) { store.prevMonth() } }
 
+
     func jumpToToday() {
         let c = Calendar.current.dateComponents([.month, .year], from: Date())
         let m = c.month ?? store.currentMonth
@@ -305,10 +320,14 @@ struct ContentView: View {
             headerScale   = 0.88
             headerOpacity = 0
             change()
+            squaresVisible = false
             withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                 headerOffset  = 0
                 headerScale   = 1
                 headerOpacity = 1
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                squaresVisible = true
             }
         }
     }

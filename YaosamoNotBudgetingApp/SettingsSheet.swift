@@ -34,20 +34,22 @@ struct SettingsSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
 
-                    recordSection(title: "INCOME",   records: store.activeIncomeRecords, total: store.totalIncome, isIncome: true)
+                    VStack(alignment: .leading, spacing: 12) {
+                        recordSection(title: "INCOME",   records: store.activeIncomeRecords, total: store.totalIncome, isIncome: true)
 
-                    VStack(spacing: 0) {
-                        Toggle(isOn: $store.clearIncomeMonthly) {
-                            Text("Clear income every month")
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
+                        VStack(spacing: 0) {
+                            Toggle(isOn: $store.clearIncomeMonthly) {
+                                Text("Clear income every month")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.primary)
+                            }
+                            .tint(AppColors.success)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                         }
-                        .tint(AppColors.success)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                        .background(Color(.tertiarySystemBackground))
+                        .cornerRadius(14)
                     }
-                    .background(Color(.systemBackground))
-                    .cornerRadius(14)
 
                     recordSection(title: "EXPENSES", records: store.expenseRecords, total: store.totalExpenses, isIncome: false)
 
@@ -69,7 +71,7 @@ struct SettingsSheet: View {
                             .padding(.vertical, 14)
                         }
                     }
-                    .background(Color(.systemBackground))
+                    .background(Color(.tertiarySystemBackground))
                     .cornerRadius(14)
                 }
                 .padding(.horizontal, 24)
@@ -96,7 +98,7 @@ struct SettingsSheet: View {
 
             SheetHeader(title: "Monthly Balance") { isPresented = false }
         }
-        .background(.clear)
+        .background(Color(.secondarySystemBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .sheet(isPresented: $showCurrencyPicker) {
             CurrencyPickerSheet()
@@ -164,7 +166,7 @@ struct SettingsSheet: View {
                 }
 
             }
-            .background(Color(.systemBackground))
+            .background(Color(.tertiarySystemBackground))
             .cornerRadius(14)
 
         }
@@ -178,9 +180,7 @@ struct CurrencyPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 0) {
-            SheetHeader(title: "Currency") { dismiss() }
-
+        ZStack(alignment: .top) {
             List(BudgetStore.supported) { currency in
                 Button {
                     store.currencyCode = currency.code
@@ -209,9 +209,35 @@ struct CurrencyPickerSheet: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .listRowBackground(Color.clear)
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: 72)
+            }
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .frame(height: 96)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.5),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .allowsHitTesting(false)
+            }
+
+            SheetHeader(title: "Currency") { dismiss() }
         }
+        .background(Color(.secondarySystemBackground))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
