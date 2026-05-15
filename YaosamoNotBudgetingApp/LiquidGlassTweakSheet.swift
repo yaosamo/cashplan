@@ -14,8 +14,6 @@ struct LiquidGlassTweakSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SheetHeader(title: "Liquid Glass") { isPresented = false }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
 
             Picker("Mode", selection: $editScheme) {
                 Text("Light").tag(ColorScheme.light)
@@ -114,7 +112,7 @@ struct LiquidGlassTweakSheet: View {
         HStack(spacing: 10) {
             Text(label).font(.system(size: 14)).foregroundColor(.primary)
                 .frame(width: 54, alignment: .leading)
-            Slider(value: value, in: range).tint(green)
+            Slider(value: value, in: range).tint(AppColors.success)
             Text(String(format: "%.2f", value.wrappedValue))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.secondary).frame(width: 36, alignment: .trailing)

@@ -27,6 +27,8 @@ struct Currency: Identifiable {
 
 class BudgetStore: ObservableObject {
     @Published var incomeRecords: [FinancialRecord] = []
+    @Published var monthlyIncomeRecords: [String: [FinancialRecord]] = [:]
+    @Published var clearIncomeMonthly: Bool = false
     @Published var expenseRecords: [FinancialRecord] = []
     @Published var items: [PurchaseItem] = []
     @Published var currentMonth: Int
@@ -63,7 +65,7 @@ class BudgetStore: ObservableObject {
     private let formatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.maximumFractionDigits = 0
+        f.maximumFractionDigits = 2
         f.minimumFractionDigits = 0
         return f
     }()
@@ -76,7 +78,13 @@ class BudgetStore: ObservableObject {
 
     // MARK: - Computed balance
 
-    var totalIncome: Double   { incomeRecords.reduce(0)  { $0 + $1.amount } }
+    var currentMonthKey: String { "\(currentYear)-\(String(format: "%02d", currentMonth))" }
+
+    var activeIncomeRecords: [FinancialRecord] {
+        clearIncomeMonthly ? monthlyIncomeRecords[currentMonthKey, default: []] : incomeRecords
+    }
+
+    var totalIncome: Double   { activeIncomeRecords.reduce(0) { $0 + $1.amount } }
     var totalExpenses: Double { expenseRecords.reduce(0) { $0 + $1.amount } }
     var balance: Double       { totalIncome - totalExpenses }
 
@@ -107,9 +115,15 @@ class BudgetStore: ObservableObject {
            let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) {
             expenseRecords = decoded
         }
+        clearIncomeMonthly = kv.bool(forKey: "clearIncomeMonthly")
+        if let data = kv.data(forKey: "monthlyIncomeRecords"),
+           let decoded = try? JSONDecoder().decode([String: [FinancialRecord]].self, from: data) {
+            monthlyIncomeRecords = decoded
+        }
 
         $incomeRecords
             .combineLatest($expenseRecords, $items, $currencyCode)
+            .combineLatest($monthlyIncomeRecords, $clearIncomeMonthly)
             .dropFirst()
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.persist() }
@@ -126,9 +140,11 @@ class BudgetStore: ObservableObject {
 
     private func persist() {
         kv.set(currencyCode, forKey: "currencyCode")
-        if let data = try? JSONEncoder().encode(items)          { kv.set(data, forKey: "items") }
-        if let data = try? JSONEncoder().encode(incomeRecords)  { kv.set(data, forKey: "incomeRecords") }
-        if let data = try? JSONEncoder().encode(expenseRecords) { kv.set(data, forKey: "expenseRecords") }
+        kv.set(clearIncomeMonthly, forKey: "clearIncomeMonthly")
+        if let data = try? JSONEncoder().encode(items)                 { kv.set(data, forKey: "items") }
+        if let data = try? JSONEncoder().encode(incomeRecords)         { kv.set(data, forKey: "incomeRecords") }
+        if let data = try? JSONEncoder().encode(expenseRecords)        { kv.set(data, forKey: "expenseRecords") }
+        if let data = try? JSONEncoder().encode(monthlyIncomeRecords)  { kv.set(data, forKey: "monthlyIncomeRecords") }
         kv.synchronize()
     }
 
@@ -140,6 +156,9 @@ class BudgetStore: ObservableObject {
            let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) { incomeRecords = decoded }
         if let data = kv.data(forKey: "expenseRecords"),
            let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) { expenseRecords = decoded }
+        clearIncomeMonthly = kv.bool(forKey: "clearIncomeMonthly")
+        if let data = kv.data(forKey: "monthlyIncomeRecords"),
+           let decoded = try? JSONDecoder().decode([String: [FinancialRecord]].self, from: data) { monthlyIncomeRecords = decoded }
     }
 
     // MARK: - Computed
@@ -157,6 +176,22 @@ class BudgetStore: ObservableObject {
     }
 
     var monthName: String { label(format: "MMMM") }
+
+    var monthProgress: Double {
+        let cal = Calendar.current
+        let now = Date()
+        let comps = cal.dateComponents([.month, .year], from: now)
+        let thisMonth = comps.month ?? currentMonth
+        let thisYear  = comps.year  ?? currentYear
+        if currentYear < thisYear  || (currentYear == thisYear && currentMonth < thisMonth) { return 1.0 }
+        if currentYear > thisYear  || (currentYear == thisYear && currentMonth > thisMonth) { return 0.0 }
+        var dc = DateComponents(); dc.month = currentMonth; dc.year = currentYear
+        guard let anchor = cal.date(from: dc),
+              let range  = cal.range(of: .day, in: .month, for: anchor) else { return 0 }
+        return Double(cal.component(.day, from: now)) / Double(range.count)
+    }
+
+    var isOver: Bool { balance - monthSpent < 0 }
 
     var leftDisplay: String {
         let net = balance - monthSpent
@@ -219,7 +254,13 @@ class BudgetStore: ObservableObject {
 
     func addIncome(name: String, amount: Double) {
         guard amount > 0, amount.isFinite else { return }
-        incomeRecords.append(FinancialRecord(name: name, amount: amount))
+        if clearIncomeMonthly {
+            var records = monthlyIncomeRecords[currentMonthKey, default: []]
+            records.append(FinancialRecord(name: name, amount: amount))
+            monthlyIncomeRecords[currentMonthKey] = records
+        } else {
+            incomeRecords.append(FinancialRecord(name: name, amount: amount))
+        }
     }
 
     func addExpense(name: String, amount: Double) {
@@ -230,8 +271,15 @@ class BudgetStore: ObservableObject {
     func updateRecord(id: UUID, isIncome: Bool, name: String, amount: Double) {
         guard amount > 0, amount.isFinite else { return }
         if isIncome {
-            guard let i = incomeRecords.firstIndex(where: { $0.id == id }) else { return }
-            incomeRecords[i].name = name; incomeRecords[i].amount = amount
+            if clearIncomeMonthly {
+                var records = monthlyIncomeRecords[currentMonthKey, default: []]
+                guard let i = records.firstIndex(where: { $0.id == id }) else { return }
+                records[i].name = name; records[i].amount = amount
+                monthlyIncomeRecords[currentMonthKey] = records
+            } else {
+                guard let i = incomeRecords.firstIndex(where: { $0.id == id }) else { return }
+                incomeRecords[i].name = name; incomeRecords[i].amount = amount
+            }
         } else {
             guard let i = expenseRecords.firstIndex(where: { $0.id == id }) else { return }
             expenseRecords[i].name = name; expenseRecords[i].amount = amount
@@ -239,20 +287,33 @@ class BudgetStore: ObservableObject {
     }
 
     func removeRecord(id: UUID, isIncome: Bool) {
-        if isIncome { incomeRecords.removeAll { $0.id == id } }
-        else        { expenseRecords.removeAll { $0.id == id } }
+        if isIncome {
+            if clearIncomeMonthly {
+                var records = monthlyIncomeRecords[currentMonthKey, default: []]
+                records.removeAll { $0.id == id }
+                monthlyIncomeRecords[currentMonthKey] = records
+            } else {
+                incomeRecords.removeAll { $0.id == id }
+            }
+        } else {
+            expenseRecords.removeAll { $0.id == id }
+        }
     }
 
     // MARK: - Sample data
 
     private static func sampleItems(month: Int, year: Int) -> [PurchaseItem] {
         [
-            PurchaseItem(name: "Sail shade",     amount: 400, isBought: true, boughtMonth: month, boughtYear: year),
-            PurchaseItem(name: "Storage box",    amount: 100),
-            PurchaseItem(name: "Garden bench",   amount: 250),
-            PurchaseItem(name: "Bird feeder",    amount: 30),
-            PurchaseItem(name: "Patio umbrella", amount: 350),
-            PurchaseItem(name: "Planter set",    amount: 75),
+            PurchaseItem(name: "Standing desk",      amount: 649),
+            PurchaseItem(name: "Mechanical keyboard", amount: 189),
+            PurchaseItem(name: "Monitor light bar",  amount: 55),
+            PurchaseItem(name: "Wireless charger",   amount: 39),
+            PurchaseItem(name: "Desk organiser",     amount: 45),
+            PurchaseItem(name: "Noise cancelling headphones", amount: 299),
+            PurchaseItem(name: "Laptop stand",       amount: 79),
+            PurchaseItem(name: "Webcam",             amount: 129),
+            PurchaseItem(name: "Cable management kit", amount: 22),
+            PurchaseItem(name: "Desk plant",         amount: 18),
         ]
     }
 }

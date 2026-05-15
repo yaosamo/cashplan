@@ -1,6 +1,8 @@
 import SwiftUI
 
-let green = Color(red: 0.180, green: 0.737, blue: 0.549)
+enum AppColors {
+    static let success = Color(red: 0.180, green: 0.737, blue: 0.549)
+}
 
 // MARK: - Glass Params
 

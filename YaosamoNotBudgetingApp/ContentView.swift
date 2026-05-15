@@ -2,12 +2,16 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var store: BudgetStore
+    @Environment(\.colorScheme) var colorScheme
+    @StateObject private var motion = MotionManager()
+
     @State private var showSettings    = false
     @State private var showAddPurchase = false
     @State private var editingItem: PurchaseItem? = nil
     @State private var headerOffset: CGFloat = 0
     @State private var headerScale: CGFloat  = 1.0
     @State private var headerOpacity: Double = 1.0
+    @State private var leftShake: CGFloat = 0
 #if DEBUG
     @State private var showTweak    = false
     @State private var showTweakBtn = false
@@ -20,12 +24,12 @@ struct ContentView: View {
     }
 
     var body: some View {
+        let bg: Color = colorScheme == .dark ? Color(.secondarySystemGroupedBackground) : Color(red: 0.94, green: 0.94, blue: 0.94)
         ZStack(alignment: .bottom) {
-            Color(.secondarySystemGroupedBackground).ignoresSafeArea()
+            bg.ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-
                     VStack(spacing: 4) {
                         Text("SPENT IN \(store.monthName)")
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -55,11 +59,55 @@ struct ContentView: View {
                             .tracking(2)
                             .foregroundColor(.secondary)
                             .contentTransition(.numericText())
+                            .offset(x: leftShake)
+                            .onChange(of: store.isOver) { _, isOver in
+                                guard isOver else { return }
+                                let g = UIImpactFeedbackGenerator(style: .heavy)
+                                g.prepare()
+                                let offsets: [Double] = [0, 0.45, 0.53, 0.61, 0.83, 0.91]
+                                for (i, t) in offsets.enumerated() {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + t) {
+                                        g.impactOccurred()
+                                        let dir: CGFloat = i.isMultiple(of: 2) ? -6 : 6
+                                        leftShake = dir
+                                        withAnimation(.spring(response: 0.2, dampingFraction: 0.45)) {
+                                            leftShake = 0
+                                        }
+                                    }
+                                }
+                            }
                             .animation(.spring(response: 0.4), value: store.leftDisplay)
+
+                        // Month progress
+                        VStack(spacing: 8) {
+                            GeometryReader { geo in
+                                let count  = 31
+                                let gap: CGFloat = 3
+                                let blockW = (geo.size.width - gap * CGFloat(count - 1)) / CGFloat(count)
+                                HStack(spacing: gap) {
+                                    ForEach(0..<count, id: \.self) { i in
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(Double(i) / Double(count) < store.monthProgress
+                                                  ? Color.primary
+                                                  : Color.primary.opacity(0.12))
+                                            .frame(width: blockW, height: 8)
+                                    }
+                                }
+                            }
+                            .frame(height: 8)
+
+                            Text("MONTH PROGRESS \(Int(store.monthProgress * 100))%")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .tracking(2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 28)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 96)
                     .padding(.bottom, 72)
+                    .offset(x: motion.tilt.width, y: motion.tilt.height)
+                    .animation(.interactiveSpring(response: 0.4, dampingFraction: 0.75), value: motion.tilt)
 
                     if !store.boughtInCurrentMonth.isEmpty {
                         sectionLabel("BOUGHT")
@@ -82,6 +130,36 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 24)
             }
+
+            // Top fade — extends into status bar
+            LinearGradient(
+                stops: [
+                    .init(color: bg,              location: 0),
+                    .init(color: bg.opacity(0),   location: 1)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 100)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            // Bottom fade — extends into home indicator
+            VStack(spacing: 0) {
+                Spacer()
+                LinearGradient(
+                    stops: [
+                        .init(color: bg,              location: 0),
+                        .init(color: bg.opacity(0),   location: 1)
+                    ],
+                    startPoint: .bottom, endPoint: .top
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 100)
+                .allowsHitTesting(false)
+            }
+            .ignoresSafeArea()
 
             VStack {
                 HStack {
@@ -130,21 +208,22 @@ struct ContentView: View {
             glassBtn("Plan Purchase", sfSymbol: "plus", fontSize: 16, hPad: 32, vPad: 16) {
                 showAddPurchase = true
             }
-            .padding(.bottom, 36)
+            .padding(.bottom, 16)
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet(isPresented: $showSettings)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
         }
         .sheet(isPresented: $showAddPurchase) {
-            AddPurchaseSheet(isPresented: $showAddPurchase)
-                .presentationDetents([.height(280)])
+            EditItemSheet()
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $editingItem) { item in
             EditItemSheet(item: item)
-                .presentationDetents([.height(280)])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
 #if DEBUG
@@ -161,6 +240,8 @@ struct ContentView: View {
                     if value.translation.width < 0 { goNext() } else { goPrev() }
                 }
         )
+        .onAppear { motion.start() }
+        .onDisappear { motion.stop() }
     }
 
     // MARK: - Buttons

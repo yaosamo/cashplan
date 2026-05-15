@@ -15,6 +15,9 @@
 		C60000000000000000000026 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000016 /* SettingsSheet.swift */; };
 		C70000000000000000000027 /* PurchaseSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70000000000000000000017 /* PurchaseSheets.swift */; };
 		CA0000000000000000000030 /* LiquidGlassTweakSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000030 /* LiquidGlassTweakSheet.swift */; };
+		CB0000000000000000000031 /* MotionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD0000000000000000000032 /* MotionManager.swift */; };
+		CC0000000000000000000032 /* AmountEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0000000000000000000033 /* AmountEntryView.swift */; };
+		CD0000000000000000000033 /* SheetHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF0000000000000000000034 /* SheetHeader.swift */; };
 		C80000000000000000000028 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B80000000000000000000018 /* Assets.xcassets */; };
 		C90000000000000000000029 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B90000000000000000000019 /* Preview Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -28,6 +31,9 @@
 		B60000000000000000000016 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		B70000000000000000000017 /* PurchaseSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchaseSheets.swift; sourceTree = "<group>"; };
 		BB0000000000000000000030 /* LiquidGlassTweakSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassTweakSheet.swift; sourceTree = "<group>"; };
+		BD0000000000000000000032 /* MotionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionManager.swift; sourceTree = "<group>"; };
+		BE0000000000000000000033 /* AmountEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountEntryView.swift; sourceTree = "<group>"; };
+		BF0000000000000000000034 /* SheetHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetHeader.swift; sourceTree = "<group>"; };
 		B80000000000000000000018 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B90000000000000000000019 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		BA0000000000000000000020 /* YaosamoNotBudgetingApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YaosamoNotBudgetingApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -72,6 +78,9 @@
 				B60000000000000000000016 /* SettingsSheet.swift */,
 				B70000000000000000000017 /* PurchaseSheets.swift */,
 				BB0000000000000000000030 /* LiquidGlassTweakSheet.swift */,
+				BD0000000000000000000032 /* MotionManager.swift */,
+				BE0000000000000000000033 /* AmountEntryView.swift */,
+				BF0000000000000000000034 /* SheetHeader.swift */,
 				BC0000000000000000000031 /* YaosamoNotBudgetingApp.entitlements */,
 				B80000000000000000000018 /* Assets.xcassets */,
 				A60000000000000000000006 /* Preview Content */,
@@ -165,6 +174,9 @@
 				C60000000000000000000026 /* SettingsSheet.swift in Sources */,
 				C70000000000000000000027 /* PurchaseSheets.swift in Sources */,
 				CA0000000000000000000030 /* LiquidGlassTweakSheet.swift in Sources */,
+				CB0000000000000000000031 /* MotionManager.swift in Sources */,
+				CC0000000000000000000032 /* AmountEntryView.swift in Sources */,
+				CD0000000000000000000033 /* SheetHeader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
