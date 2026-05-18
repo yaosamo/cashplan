@@ -8,18 +8,13 @@ struct ContentView: View {
     @State private var showSettings    = false
     @State private var showAnalytics   = false
     @State private var showAddPurchase = false
-    @State private var showPiggyBank   = false
     @State private var editingItem: PurchaseItem? = nil
     @State private var headerOffset: CGFloat = 0
     @State private var headerScale: CGFloat  = 1.0
     @State private var headerOpacity: Double = 1.0
     @State private var leftShake: CGFloat = 0
-    @State private var piggyBankLift: CGFloat = 0
-    @State private var piggyCoinDrops: [PiggyCoinDrop] = []
-    @State private var piggyLongPressTriggered = false
     @State private var squaresVisible: Bool = false
-    @State private var scrollOffset: CGFloat = 0
-    @State private var headerBarsPaydayProximity: CGFloat = 0
+    @State private var topMarkerOffset: CGFloat = 0
 #if DEBUG
     @State private var showTweak    = false
     @State private var showTweakBtn = false
@@ -41,7 +36,7 @@ struct ContentView: View {
                     Color.clear
                         .preference(
                             key: ScrollOffsetPreferenceKey.self,
-                            value: -proxy.frame(in: .named("homeScroll")).minY
+                            value: proxy.frame(in: .named("homeScroll")).minY
                         )
                 }
                 .frame(height: 0)
@@ -141,9 +136,6 @@ struct ContentView: View {
                                 .foregroundColor(.primary)
                         }
                         .padding(.top, 44)
-
-                        piggyBankRow
-                            .padding(.top, 64)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 96)
@@ -172,22 +164,19 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 24)
                 .background(alignment: .top) {
-                    GeometryReader { proxy in
-                        HeaderBarsObject()
-                            .frame(width: proxy.size.width * 1.28, height: 360)
-                            .rotationEffect(.degrees(32))
-                            .blur(radius: headerBarsBlurRadius)
-                            .position(x: proxy.size.width / 2 + headerBarsRestingXOffset, y: headerBarsRestingY)
-                            .animation(.easeInOut(duration: 0.55), value: headerBarsRestingY)
-                            .animation(.easeInOut(duration: 0.55), value: headerBarsRestingXOffset)
-                            .accessibilityHidden(true)
-                            .allowsHitTesting(false)
-                    }
-                    .allowsHitTesting(false)
+                    HeaderBarsObject(spendingProgress: headerSpendingProgress)
+                        .frame(width: 210, height: 210)
+                        .rotationEffect(.degrees(45))
+                        .scaleEffect(headerBarsPullScale)
+                        .saturation(1.25)
+                        .blur(radius: 26)
+                        .offset(y: headerBarsYOffset)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
                 }
             }
             .coordinateSpace(name: "homeScroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { topMarkerOffset = $0 }
 
             // Top fade — extends into status bar
             LinearGradient(
@@ -289,12 +278,6 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showPiggyBank) {
-            PiggyBankSheet()
-                .presentationDetents([.fraction(0.46)])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
-        }
         .sheet(item: $editingItem) { item in
             EditItemSheet(item: item)
                 .presentationDetents([.large])
@@ -321,103 +304,11 @@ struct ContentView: View {
         )
         .onAppear {
             motion.start()
-            headerBarsPaydayProximity = paydayProximity
         }
         .onDisappear { motion.stop() }
-        .onChange(of: paydayProximity) { _, newValue in
-            withAnimation(.easeInOut(duration: 0.55)) {
-                headerBarsPaydayProximity = newValue
-            }
-        }
     }
 
     // MARK: - Buttons
-
-    var piggyBankRow: some View {
-        Button {
-            guard !piggyLongPressTriggered else {
-                piggyLongPressTriggered = false
-                return
-            }
-            depositPiggyBankCoin()
-        } label: {
-            ZStack {
-                HStack(spacing: 12) {
-                    Image(systemName: "banknote.fill")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.secondary.opacity(0.64))
-                        .frame(width: 34, height: 34)
-                        .offset(y: piggyBankLift)
-
-                    HStack(spacing: 8) {
-                        Text(store.formatAmount(store.piggyBankAmount))
-                            .foregroundColor(.secondary)
-                            .contentTransition(.numericText())
-                        Text("in Piggy Bank")
-                            .foregroundColor(.primary)
-                    }
-                    .font(.system(size: 26, weight: .medium, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                }
-                .contentShape(Rectangle())
-
-                ForEach(piggyCoinDrops) { coin in
-                    Circle()
-                        .fill(Color.primary.opacity(0.86))
-                        .frame(width: 9, height: 9)
-                        .offset(x: coin.isLanded ? -96 : 30, y: coin.isLanded ? -8 : -105)
-                        .scaleEffect(coin.isLanded ? 0.55 : 1)
-                        .opacity(coin.isLanded ? 0 : 1)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .onLongPressGesture(minimumDuration: 0.45) {
-            piggyLongPressTriggered = true
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showPiggyBank = true
-        }
-        .accessibilityLabel("Piggy Bank")
-        .accessibilityValue(store.formatAmount(store.piggyBankAmount))
-    }
-
-    func depositPiggyBankCoin() {
-        guard store.depositToPiggyBank() else {
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            return
-        }
-
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        let id = UUID()
-        piggyCoinDrops.append(PiggyCoinDrop(id: id))
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-            withAnimation(.interpolatingSpring(stiffness: 180, damping: 16)) {
-                if let index = piggyCoinDrops.firstIndex(where: { $0.id == id }) {
-                    piggyCoinDrops[index].isLanded = true
-                }
-            }
-        }
-
-        let shakes: [(Double, CGFloat)] = [
-            (0.12, -5),
-            (0.20, 3),
-            (0.28, -2),
-            (0.36, 0)
-        ]
-        for shake in shakes {
-            DispatchQueue.main.asyncAfter(deadline: .now() + shake.0) {
-                withAnimation(.spring(response: 0.16, dampingFraction: 0.52)) {
-                    piggyBankLift = shake.1
-                }
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.48) {
-            piggyCoinDrops.removeAll { $0.id == id }
-        }
-    }
 
     @ViewBuilder
     func arrowBtn(_ sfSymbol: String, action: @escaping () -> Void) -> some View {
@@ -463,36 +354,23 @@ struct ContentView: View {
         UIScreen.main.bounds.width < 380 ? 72 : nil
     }
 
-    var headerBarsScrollProgress: CGFloat {
-        min(max(scrollOffset, 0) / 180, 1)
+    var headerBarsPullDistance: CGFloat {
+        min(max(topMarkerOffset, 0), 120)
     }
 
-    var headerBarsBlurRadius: CGFloat {
-        32 + headerBarsScrollProgress * 288
+    var headerBarsPullScale: CGFloat {
+        1 + headerBarsPullDistance / 240
     }
 
-    var headerBarsRestingXOffset: CGFloat {
-        -100 * headerBarsPaydayProximity
+    var headerBarsYOffset: CGFloat {
+        -153 - headerBarsPullDistance * 0.7
     }
 
-    var headerBarsRestingY: CGFloat {
-        headerBarsTopY + headerBarsPaydayProximity * 83
-    }
-
-    var headerBarsTopY: CGFloat { -198 }
-
-    var paydayProximity: CGFloat {
-        guard isCurrentMonth, let daysAway = daysUntilNextSalaryPayday else { return 0 }
-        let lookahead: CGFloat = 7
-        return max(0, 1 - min(CGFloat(daysAway), lookahead) / lookahead)
-    }
-
-    var daysUntilNextSalaryPayday: Int? {
-        let today = Calendar.current.component(.day, from: Date())
-        return store.salaryPaydaysInCurrentMonth
-            .filter { $0 >= today }
-            .map { $0 - today }
-            .min()
+    var headerSpendingProgress: CGFloat {
+        guard store.balance > 0 else {
+            return store.monthSpent > 0 ? 1 : 0
+        }
+        return min(max(CGFloat(store.monthSpent / store.balance), 0), 1)
     }
 
     func monthProgressColor(index: Int) -> Color {
@@ -547,122 +425,59 @@ private struct ScrollOffsetPreferenceKey: PreferenceKey {
     }
 }
 
-private struct PiggyCoinDrop: Identifiable {
-    let id: UUID
-    var isLanded = false
-}
-
-struct PiggyBankSheet: View {
-    @EnvironmentObject var store: BudgetStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var showAmountSheet = false
-    @State private var showSmashPrompt = false
-    @State private var input = ""
-
-    var body: some View {
-        VStack(spacing: 0) {
-            SheetHeader(title: "Piggy Bank") { dismiss() }
-
-            Spacer()
-
-            Image(systemName: "banknote.fill")
-                .font(.system(size: 42, weight: .medium))
-                .foregroundColor(.secondary.opacity(0.72))
-                .padding(.bottom, 18)
-
-            Text(store.formatAmount(store.piggyBankAmount))
-                .font(.system(size: 64, weight: .medium, design: .rounded))
-                .foregroundColor(.primary)
-                .contentTransition(.numericText())
-                .minimumScaleFactor(0.45)
-                .lineLimit(1)
-                .padding(.horizontal, 24)
-
-            Text("IN PIGGY BANK")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .tracking(2)
-                .foregroundColor(.secondary)
-                .padding(.top, 10)
-
-            Spacer()
-
-            HStack(spacing: 10) {
-                Button {
-                    input = MoneyInput.editableString(store.piggyBankAmount)
-                    showAmountSheet = true
-                } label: {
-                    Text("Edit")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(14)
-                }
-
-                Button {
-                    showSmashPrompt = true
-                } label: {
-                    Text("Smash it")
-                        .font(.headline)
-                        .foregroundColor(Color(.systemBackground))
-                        .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .background(Color(.label))
-                        .cornerRadius(14)
-                }
-                .disabled(store.piggyBankAmount <= 0)
-                .opacity(store.piggyBankAmount <= 0 ? 0.42 : 1)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
-        }
-        .background(Color(.secondarySystemBackground))
-        .sheet(isPresented: $showAmountSheet, onDismiss: saveEditedAmount) {
-            AmountEntrySheet(input: $input)
-                .presentationDetents([.fraction(0.58)])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
-        }
-        .alert("Smash Piggy Bank?", isPresented: $showSmashPrompt) {
-            Button("Cancel", role: .cancel) { }
-            Button("Smash it", role: .destructive) {
-                store.smashPiggyBank()
-                dismiss()
-            }
-        } message: {
-            Text("\(store.formatAmount(store.piggyBankAmount)) will be added back to your spendable balance.")
-        }
-    }
-
-    private func saveEditedAmount() {
-        guard let amount = Double(input) else { return }
-        store.updatePiggyBank(amount: amount)
-    }
-}
-
 struct HeaderBarsObject: View {
-    private let bars: [(color: Color, height: CGFloat)] = [
+    let spendingProgress: CGFloat
+
+    private let bars: [(color: Color, baseHeight: CGFloat)] = [
         (Color(red: 0.62, green: 0.58, blue: 0.84), 0.49),
         (Color(red: 0.94, green: 0.74, blue: 0.73), 0.24),
-        (Color(red: 1.00, green: 0.84, blue: 0.38), 0.11),
+        (Color(red: 1.00, green: 0.85, blue: 0.39), 0.11),
         (Color(red: 0.84, green: 0.96, blue: 0.55), 0.16)
     ]
 
     var body: some View {
         GeometryReader { geo in
-            VStack(spacing: 0) {
-                ForEach(Array(bars.enumerated()), id: \.offset) { _, bar in
-                    bar.color
-                        .frame(height: geo.size.height * bar.height)
+            bandStack(size: geo.size)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(.white.opacity(0.2), lineWidth: 1)
                 }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
         }
+    }
+
+    private func bandStack(size: CGSize) -> some View {
+        let heights = segmentHeights()
+
+        return VStack(spacing: 0) {
+            ForEach(Array(bars.enumerated()), id: \.offset) { index, bar in
+                bar.color
+                    .frame(height: size.height * heights[index])
+                    .overlay {
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(index == 0 ? 0.16 : 0.08),
+                                Color.black.opacity(0.05)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+            }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func segmentHeights() -> [CGFloat] {
+        let progress = min(max(spendingProgress, 0), 1)
+        let calmHeights: [CGFloat] = [0.25, 0.25, 0.25, 0.25]
+        let spentHeights: [CGFloat] = [0.52, 0.25, 0.15, 0.08]
+        let blend = progress <= 0.10 ? 0 : (progress - 0.10) / 0.90
+        let baseHeights = zip(calmHeights, spentHeights).map { calm, spent in
+            calm + (spent - calm) * blend
+        }
+
+        let total = baseHeights.reduce(0, +)
+        return baseHeights.map { $0 / total }
     }
 }

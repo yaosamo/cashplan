@@ -1,7 +1,24 @@
 import SwiftUI
 import Combine
+import OSLog
 
-struct PurchaseItem: Identifiable, Codable {
+private let log = Logger(subsystem: "YaosamoNotBudgetingApp", category: "BudgetStore")
+
+protocol UbiquitousKVStore: AnyObject {
+    func string(forKey aKey: String) -> String?
+    func data(forKey aKey: String) -> Data?
+    func bool(forKey aKey: String) -> Bool
+    func double(forKey aKey: String) -> Double
+    func set(_ aString: String?, forKey aKey: String)
+    func set(_ aData: Data?, forKey aKey: String)
+    func set(_ value: Bool, forKey aKey: String)
+    func set(_ value: Double, forKey aKey: String)
+    @discardableResult func synchronize() -> Bool
+}
+
+extension NSUbiquitousKeyValueStore: UbiquitousKVStore {}
+
+struct PurchaseItem: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
     var amount: Double
@@ -36,7 +53,7 @@ enum IncomeCadence: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-struct FinancialRecord: Identifiable, Codable {
+struct FinancialRecord: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
     var amount: Double
@@ -98,12 +115,13 @@ class BudgetStore: ObservableObject {
     @Published var clearIncomeMonthly: Bool = false
     @Published var expenseRecords: [FinancialRecord] = []
     @Published var items: [PurchaseItem] = []
-    @Published var piggyBankAmount: Double = 0
     @Published var currentMonth: Int
     @Published var currentYear: Int
     @Published var currencyCode: String
 
-    private let kv = NSUbiquitousKeyValueStore.default
+    private let kv: UbiquitousKVStore
+    private let calendar: Calendar
+    private let now: () -> Date
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Currency
@@ -337,56 +355,81 @@ class BudgetStore: ObservableObject {
 
     var totalIncome: Double        { activeIncomeRecords.reduce(0) { $0 + $1.monthlyAmount } }
     var totalExpenses: Double      { expenseRecords.reduce(0) { $0 + $1.amount } }
-    var totalBalance: Double       { totalIncome - totalExpenses }
-    var balance: Double            { totalBalance - piggyBankAmount }
+    var balance: Double            { totalIncome - totalExpenses }
 
     // MARK: - Init
 
-    init() {
-        let comps = Calendar.current.dateComponents([.month, .year], from: Date())
-        currentMonth = comps.month ?? 5
-        currentYear  = comps.year  ?? 2026
+    init(
+        calendar: Calendar = .current,
+        now: @escaping () -> Date = Date.init,
+        kvStore: UbiquitousKVStore = NSUbiquitousKeyValueStore.default,
+        observeExternalChanges: Bool = true
+    ) {
+        self.calendar = calendar
+        self.now = now
+        self.kv = kvStore
 
-        kv.synchronize()
+        let comps = calendar.dateComponents([.month, .year], from: now())
+        currentMonth = comps.month ?? 1
+        currentYear  = comps.year  ?? calendar.component(.year, from: now())
 
-        currencyCode = kv.string(forKey: "currencyCode") ?? Self.defaultCurrency()
+        kvStore.synchronize()
 
-        if let data = kv.data(forKey: "items"),
-           let decoded = try? JSONDecoder().decode([PurchaseItem].self, from: data) {
+        currencyCode = kvStore.string(forKey: "currencyCode") ?? Self.defaultCurrency()
+
+        if let data = kvStore.data(forKey: "items"),
+           let decoded = Self.tryDecode([PurchaseItem].self, from: data, key: "items") {
             items = decoded
         } else {
             items = Self.sampleItems(month: currentMonth, year: currentYear)
             persist()
         }
 
-        if let data = kv.data(forKey: "incomeRecords"),
-           let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) {
+        if let data = kvStore.data(forKey: "incomeRecords"),
+           let decoded = Self.tryDecode([FinancialRecord].self, from: data, key: "incomeRecords") {
             incomeRecords = decoded
         }
-        if let data = kv.data(forKey: "expenseRecords"),
-           let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) {
+        if let data = kvStore.data(forKey: "expenseRecords"),
+           let decoded = Self.tryDecode([FinancialRecord].self, from: data, key: "expenseRecords") {
             expenseRecords = decoded
         }
-        piggyBankAmount = max(0, kv.double(forKey: "piggyBankAmount"))
-        clearIncomeMonthly = kv.bool(forKey: "clearIncomeMonthly")
-        if let data = kv.data(forKey: "monthlyIncomeRecords"),
-           let decoded = try? JSONDecoder().decode([String: [FinancialRecord]].self, from: data) {
+        clearIncomeMonthly = kvStore.bool(forKey: "clearIncomeMonthly")
+        if let data = kvStore.data(forKey: "monthlyIncomeRecords"),
+           let decoded = Self.tryDecode([String: [FinancialRecord]].self, from: data, key: "monthlyIncomeRecords") {
             monthlyIncomeRecords = decoded
         }
 
         $incomeRecords
             .combineLatest($expenseRecords, $items, $currencyCode)
-            .combineLatest($piggyBankAmount, $monthlyIncomeRecords, $clearIncomeMonthly)
+            .combineLatest($monthlyIncomeRecords, $clearIncomeMonthly)
             .dropFirst()
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.persist() }
             .store(in: &cancellables)
 
-        NotificationCenter.default
-            .publisher(for: NSUbiquitousKeyValueStore.didChangeExternallyNotification, object: kv)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.pull() }
-            .store(in: &cancellables)
+        if observeExternalChanges, let nsKV = kvStore as? NSUbiquitousKeyValueStore {
+            NotificationCenter.default
+                .publisher(for: NSUbiquitousKeyValueStore.didChangeExternallyNotification, object: nsKV)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.pull() }
+                .store(in: &cancellables)
+        }
+    }
+
+    private static func tryDecode<T: Decodable>(_ type: T.Type, from data: Data, key: String) -> T? {
+        do { return try JSONDecoder().decode(type, from: data) }
+        catch {
+            log.error("decode failed for \"\(key, privacy: .public)\": \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private static func tryEncode<T: Encodable>(_ value: T, key: String) -> Data? {
+        do { return try JSONEncoder().encode(value) }
+        catch {
+            log.error("encode failed for \"\(key, privacy: .public)\": \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     // MARK: - iCloud
@@ -394,26 +437,37 @@ class BudgetStore: ObservableObject {
     private func persist() {
         kv.set(currencyCode, forKey: "currencyCode")
         kv.set(clearIncomeMonthly, forKey: "clearIncomeMonthly")
-        kv.set(piggyBankAmount, forKey: "piggyBankAmount")
-        if let data = try? JSONEncoder().encode(items)                 { kv.set(data, forKey: "items") }
-        if let data = try? JSONEncoder().encode(incomeRecords)         { kv.set(data, forKey: "incomeRecords") }
-        if let data = try? JSONEncoder().encode(expenseRecords)        { kv.set(data, forKey: "expenseRecords") }
-        if let data = try? JSONEncoder().encode(monthlyIncomeRecords)  { kv.set(data, forKey: "monthlyIncomeRecords") }
+        if let data = Self.tryEncode(items, key: "items") { kv.set(data, forKey: "items") }
+        if let data = Self.tryEncode(incomeRecords, key: "incomeRecords") { kv.set(data, forKey: "incomeRecords") }
+        if let data = Self.tryEncode(expenseRecords, key: "expenseRecords") { kv.set(data, forKey: "expenseRecords") }
+        if let data = Self.tryEncode(monthlyIncomeRecords, key: "monthlyIncomeRecords") { kv.set(data, forKey: "monthlyIncomeRecords") }
         kv.synchronize()
     }
 
     private func pull() {
-        if let code = kv.string(forKey: "currencyCode") { currencyCode = code }
+        if let code = kv.string(forKey: "currencyCode"), code != currencyCode { currencyCode = code }
         if let data = kv.data(forKey: "items"),
-           let decoded = try? JSONDecoder().decode([PurchaseItem].self, from: data) { items = decoded }
+           let decoded = Self.tryDecode([PurchaseItem].self, from: data, key: "items"),
+           decoded != items {
+            items = decoded
+        }
         if let data = kv.data(forKey: "incomeRecords"),
-           let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) { incomeRecords = decoded }
+           let decoded = Self.tryDecode([FinancialRecord].self, from: data, key: "incomeRecords"),
+           decoded != incomeRecords {
+            incomeRecords = decoded
+        }
         if let data = kv.data(forKey: "expenseRecords"),
-           let decoded = try? JSONDecoder().decode([FinancialRecord].self, from: data) { expenseRecords = decoded }
-        piggyBankAmount = max(0, kv.double(forKey: "piggyBankAmount"))
-        clearIncomeMonthly = kv.bool(forKey: "clearIncomeMonthly")
+           let decoded = Self.tryDecode([FinancialRecord].self, from: data, key: "expenseRecords"),
+           decoded != expenseRecords {
+            expenseRecords = decoded
+        }
+        let pulledClearMonthly = kv.bool(forKey: "clearIncomeMonthly")
+        if pulledClearMonthly != clearIncomeMonthly { clearIncomeMonthly = pulledClearMonthly }
         if let data = kv.data(forKey: "monthlyIncomeRecords"),
-           let decoded = try? JSONDecoder().decode([String: [FinancialRecord]].self, from: data) { monthlyIncomeRecords = decoded }
+           let decoded = Self.tryDecode([String: [FinancialRecord]].self, from: data, key: "monthlyIncomeRecords"),
+           decoded != monthlyIncomeRecords {
+            monthlyIncomeRecords = decoded
+        }
     }
 
     // MARK: - Computed
@@ -428,10 +482,6 @@ class BudgetStore: ObservableObject {
 
     var monthSpent: Double {
         boughtInCurrentMonth.reduce(0) { $0 + $1.amount }
-    }
-
-    var canDepositToPiggyBank: Bool {
-        balance - monthSpent >= 1
     }
 
     var monthlySpendHistory: [MonthlySpend] {
@@ -450,24 +500,23 @@ class BudgetStore: ObservableObject {
 
     var daysInCurrentMonth: Int {
         var dc = DateComponents(); dc.month = currentMonth; dc.year = currentYear
-        guard let anchor = Calendar.current.date(from: dc),
-              let range  = Calendar.current.range(of: .day, in: .month, for: anchor) else { return 31 }
+        guard let anchor = calendar.date(from: dc),
+              let range  = calendar.range(of: .day, in: .month, for: anchor) else { return 31 }
         return range.count
     }
 
     var monthProgress: Double {
-        let cal = Calendar.current
-        let now = Date()
-        let comps = cal.dateComponents([.month, .year], from: now)
+        let today = now()
+        let comps = calendar.dateComponents([.month, .year], from: today)
         let thisMonth = comps.month ?? currentMonth
         let thisYear  = comps.year  ?? currentYear
         if currentYear < thisYear  || (currentYear == thisYear && currentMonth < thisMonth) { return 1.0 }
         if currentYear > thisYear  || (currentYear == thisYear && currentMonth > thisMonth) { return 0.0 }
-        return Double(cal.component(.day, from: now)) / Double(daysInCurrentMonth)
+        return Double(calendar.component(.day, from: today)) / Double(daysInCurrentMonth)
     }
 
     var salaryPaydaysInCurrentMonth: Set<Int> {
-        let cal = Calendar.current
+        let cal = calendar
         var monthComponents = DateComponents()
         monthComponents.year = currentYear
         monthComponents.month = currentMonth
@@ -528,7 +577,7 @@ class BudgetStore: ObservableObject {
         let fmt = DateFormatter()
         fmt.dateFormat = format
         var c = DateComponents(); c.month = currentMonth; c.year = currentYear
-        return fmt.string(from: Calendar.current.date(from: c) ?? Date()).uppercased()
+        return fmt.string(from: calendar.date(from: c) ?? now()).uppercased()
     }
 
     // MARK: - Navigation
@@ -548,7 +597,7 @@ class BudgetStore: ObservableObject {
         items[i].isBought    = true
         items[i].boughtMonth = currentMonth
         items[i].boughtYear  = currentYear
-        items[i].boughtDate  = Date()
+        items[i].boughtDate  = now()
     }
 
     func unmarkBought(id: UUID) {
@@ -574,7 +623,7 @@ class BudgetStore: ObservableObject {
         items[i].link   = link.isEmpty ? nil : link
 
         if items[i].isBought, let boughtDate {
-            let components = Calendar.current.dateComponents([.month, .year], from: boughtDate)
+            let components = calendar.dateComponents([.month, .year], from: boughtDate)
             items[i].boughtDate = boughtDate
             items[i].boughtMonth = components.month
             items[i].boughtYear = components.year
@@ -583,24 +632,6 @@ class BudgetStore: ObservableObject {
 
     func removeItem(id: UUID) {
         items.removeAll { $0.id == id }
-    }
-
-    // MARK: - Piggy bank mutations
-
-    @discardableResult
-    func depositToPiggyBank(amount: Double = 1) -> Bool {
-        guard amount > 0, amount.isFinite, balance - monthSpent >= amount else { return false }
-        piggyBankAmount += amount
-        return true
-    }
-
-    func updatePiggyBank(amount: Double) {
-        guard amount.isFinite else { return }
-        piggyBankAmount = max(0, amount)
-    }
-
-    func smashPiggyBank() {
-        piggyBankAmount = 0
     }
 
     // MARK: - Financial record mutations
