@@ -1,4 +1,39 @@
 import SwiftUI
+import SafariServices
+
+enum PurchaseLink {
+    static func normalized(_ rawValue: String?) -> URL? {
+        let trimmed = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty, trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return nil }
+
+        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let components = URLComponents(string: withScheme),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = components.host,
+              host.contains("."),
+              let url = components.url else {
+            return nil
+        }
+
+        return url
+    }
+}
+
+private struct SafariURL: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+private struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) { }
+}
 
 // MARK: - Bought Row
 
@@ -7,6 +42,7 @@ struct BoughtRowView: View {
     let item: PurchaseItem
     let onEdit: () -> Void
     @State private var bounce = false
+    @State private var safariURL: SafariURL?
 
     var body: some View {
         HStack(spacing: 16) {
@@ -26,10 +62,16 @@ struct BoughtRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(item.name).font(.system(size: 17)).foregroundColor(.primary)
-                    if item.link != nil {
-                        Image(systemName: "link")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(.tertiaryLabel))
+                    if let url = PurchaseLink.normalized(item.link) {
+                        Button {
+                            safariURL = SafariURL(url: url)
+                        } label: {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .frame(width: 26, height: 26)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 if let date = item.boughtDate {
@@ -43,6 +85,10 @@ struct BoughtRowView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }
+        .sheet(item: $safariURL) { item in
+            SafariView(url: item.url)
+                .ignoresSafeArea()
+        }
     }
 }
 
@@ -53,6 +99,7 @@ struct PlannedRowView: View {
     let item: PurchaseItem
     let onEdit: () -> Void
     @State private var bounce = false
+    @State private var safariURL: SafariURL?
 
     var body: some View {
         HStack(spacing: 16) {
@@ -68,10 +115,16 @@ struct PlannedRowView: View {
             }
             HStack(spacing: 5) {
                 Text(item.name).font(.system(size: 17)).foregroundColor(.primary)
-                if item.link != nil {
-                    Image(systemName: "link")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(.tertiaryLabel))
+                if let url = PurchaseLink.normalized(item.link) {
+                    Button {
+                        safariURL = SafariURL(url: url)
+                    } label: {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             Spacer()
@@ -79,6 +132,9 @@ struct PlannedRowView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }
+        .sheet(item: $safariURL) { item in
+            SafariView(url: item.url)
+                .ignoresSafeArea()
+        }
     }
 }
-

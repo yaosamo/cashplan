@@ -28,7 +28,7 @@ struct SettingsSheet: View {
                 VStack(alignment: .leading, spacing: 24) {
                     Color.clear.frame(height: 72)
 
-                    Text(store.formatAmount(store.balance))
+                    Text(store.formatBalanceAmount(store.balance))
                         .font(.system(size: 48, weight: .medium, design: .rounded))
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
@@ -138,9 +138,16 @@ struct SettingsSheet: View {
                             .font(.system(size: 16))
                             .foregroundColor(.primary)
                         Spacer()
-                        Text(store.formatAmount(rec.amount))
-                            .font(.system(size: 16))
-                            .foregroundColor(.primary)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(store.formatAmount(isIncome ? rec.monthlyAmount : rec.amount))
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            if isIncome && rec.cadence != .monthly {
+                                Text("\(store.formatAmount(rec.amount)) \(rec.cadence.label.lowercased())")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -178,48 +185,72 @@ struct SettingsSheet: View {
 struct CurrencyPickerSheet: View {
     @EnvironmentObject var store: BudgetStore
     @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    private var filteredCurrencies: [Currency] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return BudgetStore.supported }
+
+        return BudgetStore.supported.filter { currency in
+            currency.name.localizedCaseInsensitiveContains(query) ||
+            currency.code.localizedCaseInsensitiveContains(query) ||
+            currency.symbol.localizedCaseInsensitiveContains(query) ||
+            currency.flag.localizedCaseInsensitiveContains(query)
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
-            List(BudgetStore.supported) { currency in
-                Button {
-                    store.currencyCode = currency.code
-                    dismiss()
-                } label: {
-                    HStack(spacing: 14) {
-                        Text(currency.flag)
-                            .font(.system(size: 28))
+            List {
+                if filteredCurrencies.isEmpty {
+                    Text("No currencies found")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 28)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(filteredCurrencies) { currency in
+                        Button {
+                            store.currencyCode = currency.code
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 14) {
+                                Text(currency.flag)
+                                    .font(.system(size: 28))
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(currency.name)
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
-                            Text("\(currency.code) · \(currency.symbol)")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(currency.name)
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.primary)
+                                    Text("\(currency.code) · \(currency.symbol)")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                if store.currencyCode == currency.code {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
-
-                        Spacer()
-
-                        if store.currencyCode == currency.code {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                        }
+                        .listRowBackground(Color.clear)
                     }
-                    .padding(.vertical, 4)
                 }
-                .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear.frame(height: 72)
+                Color.clear.frame(height: 128)
             }
             .overlay(alignment: .top) {
                 Rectangle()
                     .fill(.ultraThinMaterial)
-                    .frame(height: 96)
+                    .frame(height: 152)
                     .mask(
                         LinearGradient(
                             stops: [
@@ -234,10 +265,47 @@ struct CurrencyPickerSheet: View {
                     .allowsHitTesting(false)
             }
 
-            SheetHeader(title: "Currency") { dismiss() }
+            VStack(spacing: 0) {
+                SheetHeader(title: "Currency") { dismiss() }
+                CurrencySearchField(text: $searchText)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+                    .padding(.bottom, 10)
+            }
         }
         .background(Color(.secondarySystemBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+struct CurrencySearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+
+            TextField("Search", text: $text)
+                .font(.system(size: 16))
+                .textInputAutocapitalization(.characters)
+                .disableAutocorrection(true)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(.tertiaryLabel))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -250,7 +318,10 @@ struct EditRecordSheet: View {
     let isIncome: Bool
     @State private var input: String
     @State private var name: String
+    @State private var cadence: IncomeCadence
+    @State private var payday: Date
     @State private var showAmountSheet = false
+    @State private var showPaydayPicker = false
     @FocusState private var nameFocused: Bool
 
     init(record: FinancialRecord? = nil, isIncome: Bool) {
@@ -258,6 +329,8 @@ struct EditRecordSheet: View {
         self.isIncome = isIncome
         _input = State(initialValue: record.map { MoneyInput.editableString($0.amount) } ?? "")
         _name  = State(initialValue: record?.name ?? "")
+        _cadence = State(initialValue: record?.cadence ?? .monthly)
+        _payday = State(initialValue: record?.payday ?? Date())
     }
 
     private var isAdding: Bool { record == nil }
@@ -280,7 +353,7 @@ struct EditRecordSheet: View {
 
             Spacer()
 
-            TextField("–", text: $name)
+            TextField(isIncome ? "Income" : "Expense", text: $name)
                 .font(.system(size: 48, weight: .medium, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundColor(.primary)
@@ -299,9 +372,9 @@ struct EditRecordSheet: View {
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(input.isEmpty ? "–" : "\(store.currencySymbol)\(numpadDisplay(input))")
+                    Text(store.formatCurrencyInput(input))
                         .font(.system(size: 16))
-                        .foregroundColor(input.isEmpty ? Color(.tertiaryLabel) : .primary)
+                        .foregroundColor(.primary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(.tertiaryLabel))
@@ -313,15 +386,71 @@ struct EditRecordSheet: View {
             .cornerRadius(14)
             .padding(.horizontal, 16)
 
+            if isIncome {
+                HStack {
+                    Text("Cadence")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Menu {
+                        Picker("Cadence", selection: $cadence) {
+                            ForEach(IncomeCadence.allCases) { cadence in
+                                Text(cadence.label).tag(cadence)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Spacer(minLength: 0)
+                            Text(cadence.label)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color(.tertiaryLabel))
+                        }
+                        .frame(minWidth: 110, alignment: .trailing)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(14)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+
+                Button { showPaydayPicker = true } label: {
+                    HStack {
+                        Text("Payday")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(payday.formatted(.dateTime.month(.abbreviated).day().year()))
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                        Image(systemName: "calendar")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(14)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+            }
+
             Spacer().frame(height: 16)
 
             Button {
                 if canSave, let amount = Double(input) {
                     if isAdding {
-                        if isIncome { store.addIncome(name: name, amount: amount) }
+                        if isIncome { store.addIncome(name: name, amount: amount, cadence: cadence, payday: payday) }
                         else        { store.addExpense(name: name, amount: amount) }
                     } else if let record {
-                        store.updateRecord(id: record.id, isIncome: isIncome, name: name, amount: amount)
+                        store.updateRecord(id: record.id, isIncome: isIncome, name: name, amount: amount, cadence: cadence, payday: payday)
                     }
                     dismiss()
                 } else {
@@ -343,6 +472,46 @@ struct EditRecordSheet: View {
             AmountEntrySheet(input: $input)
                 .presentationDetents([.fraction(0.58)])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
         }
+        .sheet(isPresented: $showPaydayPicker) {
+            PaydayPickerSheet(payday: $payday)
+                .presentationDetents([.fraction(0.68)])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+        }
+    }
+}
+
+struct PaydayPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var payday: Date
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetHeader(title: "Payday") { dismiss() }
+
+            DatePicker("Payday", selection: $payday, displayedComponents: [.date])
+                .datePickerStyle(.graphical)
+                .tint(AppColors.success)
+                .labelsHidden()
+                .padding(.horizontal, 16)
+
+            Spacer(minLength: 12)
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(.headline)
+                    .foregroundColor(Color(.systemBackground))
+                    .frame(maxWidth: .infinity).padding(16)
+                    .background(Color(.label))
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+        }
+        .background(Color(.secondarySystemBackground))
     }
 }

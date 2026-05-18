@@ -25,44 +25,7 @@ struct LiquidGlassTweakSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    HStack(spacing: 12) {
-                        Spacer()
-                        Text("Capsule")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 20).padding(.vertical, 10)
-                            .liquidGlass()
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .frame(width: 42, height: 36)
-                            .liquidGlass()
-                        Spacer()
-                    }
-                    .padding(.vertical, 12)
-                    .background(editScheme == .dark ? Color(.systemGray6) : Color(.systemGray5))
-                    .cornerRadius(16)
-                    .environment(\.colorScheme, editScheme)
-
-                    tweakSection("HIGHLIGHT") {
-                        tweakRow("Top",    paramsBinding.highlightTop,    0...1)
-                        tweakRow("Bottom", paramsBinding.highlightBottom, 0...1)
-                    }
-                    tweakSection("EDGE GLOW") {
-                        tweakRow("Top",    paramsBinding.edgeTop,     0...1)
-                        tweakRow("Bottom", paramsBinding.edgeBottom,  0...1)
-                        tweakRow("Stroke", paramsBinding.strokeWidth, 0...4)
-                    }
-                    tweakSection("OUTER SHADOW") {
-                        tweakRow("Opacity", paramsBinding.s1Opacity, 0...0.5)
-                        tweakRow("Radius",  paramsBinding.s1Radius,  0...30)
-                        tweakRow("Y",       paramsBinding.s1Y,       0...20)
-                    }
-                    tweakSection("INNER SHADOW") {
-                        tweakRow("Opacity", paramsBinding.s2Opacity, 0...0.5)
-                        tweakRow("Radius",  paramsBinding.s2Radius,  0...10)
-                        tweakRow("Y",       paramsBinding.s2Y,       0...10)
-                    }
+                    buttonsControls
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 120)
@@ -94,6 +57,49 @@ struct LiquidGlassTweakSheet: View {
                 }
             }
             .padding(.bottom, 40)
+        }
+    }
+
+    private var buttonsControls: some View {
+        Group {
+            HStack(spacing: 12) {
+                Spacer()
+                Text("Capsule")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 20).padding(.vertical, 10)
+                    .liquidGlass()
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(width: 42, height: 36)
+                    .liquidGlass()
+                Spacer()
+            }
+            .padding(.vertical, 12)
+            .background(editScheme == .dark ? Color(.systemGray6) : Color(.systemGray5))
+            .cornerRadius(16)
+            .environment(\.colorScheme, editScheme)
+
+            tweakSection("HIGHLIGHT") {
+                tweakRow("Top", paramsBinding.highlightTop, 0...1)
+                tweakRow("Bottom", paramsBinding.highlightBottom, 0...1)
+            }
+            tweakSection("EDGE GLOW") {
+                tweakRow("Top", paramsBinding.edgeTop, 0...1)
+                tweakRow("Bottom", paramsBinding.edgeBottom, 0...1)
+                tweakRow("Stroke", paramsBinding.strokeWidth, 0...4)
+            }
+            tweakSection("OUTER SHADOW") {
+                tweakRow("Opacity", paramsBinding.s1Opacity, 0...0.5)
+                tweakRow("Radius", paramsBinding.s1Radius, 0...30)
+                tweakRow("Y", paramsBinding.s1Y, 0...20)
+            }
+            tweakSection("INNER SHADOW") {
+                tweakRow("Opacity", paramsBinding.s2Opacity, 0...0.5)
+                tweakRow("Radius", paramsBinding.s2Radius, 0...10)
+                tweakRow("Y", paramsBinding.s2Y, 0...10)
+            }
         }
     }
 

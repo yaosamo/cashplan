@@ -11,6 +11,9 @@ struct EditItemSheet: View {
     @State private var name: String
     @State private var showAmountSheet = false
     @State private var link: String
+    @State private var purchaseDate: Date
+    @State private var showPurchaseDatePicker = false
+    @State private var showInvalidLinkAlert = false
     @FocusState private var nameFocused: Bool
 
     init(item: PurchaseItem? = nil) {
@@ -18,13 +21,30 @@ struct EditItemSheet: View {
         _input = State(initialValue: item.map { MoneyInput.editableString($0.amount) } ?? "")
         _name  = State(initialValue: item?.name ?? "")
         _link  = State(initialValue: item?.link ?? "")
+        _purchaseDate = State(initialValue: Self.initialPurchaseDate(for: item))
     }
 
     private var isAdding: Bool { item == nil }
+    private var isBoughtItem: Bool { item?.isBought == true }
 
-    var canSave: Bool {
+    private var hasRequiredFields: Bool {
         guard let amount = Double(input) else { return false }
         return amount > 0 && amount.isFinite && !name.isEmpty
+    }
+
+    private var normalizedLink: String? { PurchaseLink.normalized(link)?.absoluteString }
+    private var linkIsValid: Bool { link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || normalizedLink != nil }
+
+    private static func initialPurchaseDate(for item: PurchaseItem?) -> Date {
+        if let date = item?.boughtDate { return date }
+        if let month = item?.boughtMonth, let year = item?.boughtYear {
+            var components = DateComponents()
+            components.month = month
+            components.year = year
+            components.day = 1
+            return Calendar.current.date(from: components) ?? Date()
+        }
+        return Date()
     }
 
     var body: some View {
@@ -59,9 +79,9 @@ struct EditItemSheet: View {
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(input.isEmpty ? "–" : "\(store.currencySymbol)\(numpadDisplay(input))")
+                    Text(store.formatCurrencyInput(input))
                         .font(.system(size: 16))
-                        .foregroundColor(input.isEmpty ? Color(.tertiaryLabel) : .primary)
+                        .foregroundColor(.primary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(.tertiaryLabel))
@@ -72,6 +92,30 @@ struct EditItemSheet: View {
             .background(Color(.secondarySystemBackground))
             .cornerRadius(14)
             .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+
+            if isBoughtItem {
+                Button { showPurchaseDatePicker = true } label: {
+                    HStack {
+                        Text("Purchased")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(purchaseDate.formatted(.dateTime.month(.abbreviated).day().year()))
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                        Image(systemName: "calendar")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(14)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
 
             HStack {
                 Text("Link")
@@ -89,6 +133,9 @@ struct EditItemSheet: View {
                         .multilineTextAlignment(.trailing)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     Button { link = "" } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(.tertiaryLabel))
@@ -104,24 +151,26 @@ struct EditItemSheet: View {
             Spacer().frame(height: 16)
 
             Button {
-                if canSave, let amount = Double(input) {
+                if !hasRequiredFields {
+                    showAmountSheet = true
+                } else if !linkIsValid {
+                    showInvalidLinkAlert = true
+                } else if let amount = Double(input) {
                     if isAdding {
-                        store.addItem(name: name, amount: amount, link: link)
+                        store.addItem(name: name, amount: amount, link: normalizedLink ?? "")
                     } else if let item {
-                        store.updateItem(id: item.id, name: name, amount: amount, link: link)
+                        store.updateItem(id: item.id, name: name, amount: amount, link: normalizedLink ?? "", boughtDate: isBoughtItem ? purchaseDate : nil)
                     }
                     dismiss()
-                } else {
-                    showAmountSheet = true
                 }
             } label: {
-                Text(canSave ? (isAdding ? "Add" : "Save") : "Next")
+                Text(hasRequiredFields ? (isAdding ? "Add" : "Save") : "Next")
                     .font(.headline)
                     .foregroundColor(Color(.systemBackground))
                     .frame(maxWidth: .infinity).padding(16)
                     .background(Color(.label))
                     .cornerRadius(14)
-                    .animation(.easeInOut(duration: 0.15), value: canSave)
+                    .animation(.easeInOut(duration: 0.15), value: hasRequiredFields)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
@@ -130,6 +179,51 @@ struct EditItemSheet: View {
             AmountEntrySheet(input: $input)
                 .presentationDetents([.fraction(0.58)])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
         }
+        .sheet(isPresented: $showPurchaseDatePicker) {
+            PurchaseDatePickerSheet(date: $purchaseDate)
+                .presentationDetents([.fraction(0.68)])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+        }
+        .alert("Invalid link", isPresented: $showInvalidLinkAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Enter a valid website URL, like example.com or https://example.com.")
+        }
+    }
+}
+
+struct PurchaseDatePickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var date: Date
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetHeader(title: "Purchased") { dismiss() }
+
+            DatePicker("Purchased", selection: $date, displayedComponents: [.date])
+                .datePickerStyle(.graphical)
+                .tint(AppColors.success)
+                .labelsHidden()
+                .padding(.horizontal, 16)
+
+            Spacer(minLength: 12)
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(.headline)
+                    .foregroundColor(Color(.systemBackground))
+                    .frame(maxWidth: .infinity).padding(16)
+                    .background(Color(.label))
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+        }
+        .background(Color(.secondarySystemBackground))
     }
 }

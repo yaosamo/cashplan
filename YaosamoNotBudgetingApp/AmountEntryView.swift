@@ -46,10 +46,10 @@ func numpadDisplay(_ input: String) -> String {
 
 struct AmountDisplayText: View {
     let input: String
-    let currencySymbol: String
+    let displayAmount: String
 
     var body: some View {
-        Text("\(currencySymbol)\(numpadDisplay(input))")
+        Text(displayAmount)
             .font(.system(size: 72, weight: .medium, design: .rounded))
             .foregroundColor(.primary)
             .minimumScaleFactor(0.3)
@@ -64,6 +64,7 @@ struct AmountDisplayText: View {
 // MARK: - Numpad
 
 struct NumpadView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var input: String
 
     var body: some View {
@@ -90,8 +91,21 @@ struct NumpadView: View {
                 .font(.system(size: label == "⌫" ? 20 : 26, weight: .regular))
                 .foregroundColor(.primary)
                 .frame(maxWidth: .infinity).frame(height: 48)
-                .background(Color(.secondarySystemBackground)).cornerRadius(12)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(keyBackground)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.18 : 0.10), lineWidth: 0.7)
+                        }
+                }
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.28 : 0.08), radius: 8, y: 3)
         }
+        .buttonStyle(.plain)
+    }
+
+    private var keyBackground: Color {
+        colorScheme == .dark ? Color.white.opacity(0.10) : Color.white.opacity(0.86)
     }
 }
 
@@ -105,7 +119,7 @@ struct AmountEntrySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             SheetHeader(title: "Amount", onClose: { dismiss() }, onConfirm: { dismiss() })
-            AmountDisplayText(input: input, currencySymbol: store.currencySymbol)
+            AmountDisplayText(input: input, displayAmount: store.formatCurrencyInput(input))
                 .frame(maxHeight: .infinity)
             NumpadView(input: $input).padding(.horizontal, 16)
             Spacer().frame(height: 36)
