@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var headerOpacity: Double = 1.0
     @State private var leftShake: CGFloat = 0
     @State private var squaresVisible: Bool = false
-    @State private var topMarkerOffset: CGFloat = 0
+    @State private var prismScrollPullDistance: CGFloat = 0
 #if DEBUG
     @State private var showTweak    = false
     @State private var showTweakBtn = false
@@ -32,14 +32,10 @@ struct ContentView: View {
             bg.ignoresSafeArea()
 
             ScrollView {
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: proxy.frame(in: .named("homeScroll")).minY
-                        )
+                ScrollPullObserver { pullDistance in
+                    prismScrollPullDistance = pullDistance
                 }
-                .frame(height: 0)
+                .frame(width: 0, height: 0)
 
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(spacing: 4) {
@@ -164,19 +160,22 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 24)
                 .background(alignment: .top) {
-                    HeaderBarsObject(spendingProgress: headerSpendingProgress)
+                    ZStack {
+                        HeaderBarsObject(spendingProgress: headerSpendingProgress)
+                            .frame(width: 210, height: 210)
+                            .rotationEffect(.degrees(45))
+                            .saturation(1.25)
+                            .blur(radius: 26)
+                    }
                         .frame(width: 210, height: 210)
-                        .rotationEffect(.degrees(45))
-                        .scaleEffect(headerBarsPullScale)
-                        .saturation(1.25)
-                        .blur(radius: 26)
-                        .offset(y: headerBarsYOffset)
+                        .compositingGroup()
+                        .scaleEffect(prismPullScale, anchor: .center)
+                        .offset(y: prismYOffset)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
                 }
             }
             .coordinateSpace(name: "homeScroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { topMarkerOffset = $0 }
 
             // Top fade — extends into status bar
             LinearGradient(
@@ -260,6 +259,7 @@ struct ContentView: View {
                 showAddPurchase = true
             }
             .padding(.bottom, 16)
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showSettings) {
@@ -354,16 +354,16 @@ struct ContentView: View {
         UIScreen.main.bounds.width < 380 ? 72 : nil
     }
 
-    var headerBarsPullDistance: CGFloat {
-        min(max(topMarkerOffset, 0), 120)
+    var prismPullDistance: CGFloat {
+        min(max(prismScrollPullDistance, 0), 120)
     }
 
-    var headerBarsPullScale: CGFloat {
-        1 + headerBarsPullDistance / 240
+    var prismPullScale: CGFloat {
+        1 + prismPullDistance / 220
     }
 
-    var headerBarsYOffset: CGFloat {
-        -153 - headerBarsPullDistance * 0.7
+    var prismYOffset: CGFloat {
+        -153 - prismPullDistance * 0.8
     }
 
     var headerSpendingProgress: CGFloat {
@@ -417,11 +417,70 @@ struct ContentView: View {
     }
 }
 
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+private struct ScrollPullObserver: UIViewRepresentable {
+    let onChange: (CGFloat) -> Void
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onChange: onChange)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        DispatchQueue.main.async {
+            context.coordinator.attach(from: view)
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onChange = onChange
+        DispatchQueue.main.async {
+            context.coordinator.attach(from: uiView)
+        }
+    }
+
+    final class Coordinator {
+        var onChange: (CGFloat) -> Void
+        private weak var scrollView: UIScrollView?
+        private var contentOffsetObservation: NSKeyValueObservation?
+
+        init(onChange: @escaping (CGFloat) -> Void) {
+            self.onChange = onChange
+        }
+
+        func attach(from view: UIView) {
+            guard scrollView == nil else {
+                report()
+                return
+            }
+
+            var parent = view.superview
+            while let current = parent {
+                if let scrollView = current as? UIScrollView {
+                    self.scrollView = scrollView
+                    contentOffsetObservation = scrollView.observe(
+                        \.contentOffset,
+                        options: [.new]
+                    ) { [weak self] scrollView, _ in
+                        self?.report(scrollView)
+                    }
+                    report(scrollView)
+                    return
+                }
+                parent = current.superview
+            }
+        }
+
+        private func report(_ scrollView: UIScrollView? = nil) {
+            guard let scrollView = scrollView ?? self.scrollView else { return }
+            let rawPull = -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
+            let pullDistance = min(max(rawPull, 0), 140)
+
+            DispatchQueue.main.async {
+                self.onChange(pullDistance)
+            }
+        }
     }
 }
 
